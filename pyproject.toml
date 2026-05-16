@@ -1,0 +1,58 @@
+[project]
+name = "lector-resumenes-bancarios"
+version = "0.1.0"
+description = "Procesador de extractos bancarios argentinos para ARCA"
+requires-python = ">=3.11"
+
+# --- Ruff: linter + formatter ---
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+exclude = [".venv", "build", "dist"]
+
+[tool.ruff.lint]
+# E, W: pycodestyle | F: pyflakes | I: isort | B: bugbear | UP: pyupgrade
+select = ["E", "W", "F", "I", "B", "UP", "N", "C4", "SIM"]
+ignore = ["E501"]  # ya manejada por el formatter
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+# --- Mypy: type checker ---
+[tool.mypy]
+python_version = "3.11"
+strict = true
+ignore_missing_imports = true
+disallow_untyped_defs = true
+warn_return_any = true
+warn_unused_ignores = true
+
+[[tool.mypy.overrides]]
+module = ["pdfplumber.*", "pandas.*", "openpyxl.*"]
+ignore_missing_imports = true
+
+# --- Pytest ---
+[tool.pytest.ini_options]
+minversion = "8.0"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--tb=short",
+]
+
+# --- Coverage ---
+[tool.coverage.run]
+source = ["app"]
+omit = ["*/tests/*", "*/__init__.py"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]
