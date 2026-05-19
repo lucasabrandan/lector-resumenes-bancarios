@@ -1,9 +1,12 @@
 {% extends "base.html" %}
 
-{% block title %}Subir PDF - Lector de Resúmenes{% endblock %}
+{% block title %}Subir PDF - Lector de Resumenes{% endblock %}
 
 {% block content %}
-<h1>Subir extracto bancario</h1>
+<div class="page-header">
+    <h1>Subir extracto bancario</h1>
+    <p class="subtitle">Arrastra o selecciona un PDF del Banco Supervielle</p>
+</div>
 
 <div class="card">
     {% if error %}
@@ -14,12 +17,22 @@
     <div class="alert alert-success">{{ exito }}</div>
     {% endif %}
 
-    <form method="post" enctype="multipart/form-data" action="/upload">
-        <div class="form-group">
-            <label for="archivo">Archivo PDF del extracto (Banco Supervielle):</label>
+    <form method="post" enctype="multipart/form-data" action="/upload" id="uploadForm">
+        <div class="upload-area" id="uploadArea">
+            <div class="upload-icon">&#128196;</div>
+            <div class="upload-text">
+                <strong>Hace clic aca</strong> o arrastra un archivo PDF
+            </div>
             <input type="file" id="archivo" name="archivo" accept=".pdf" required>
+            <div class="upload-filename" id="fileName"></div>
         </div>
-        <button type="submit" class="btn btn-primary">Procesar PDF</button>
+
+        <div style="margin-top: 1.25rem; text-align: center;">
+            <button type="submit" class="btn btn-primary" id="submitBtn">
+                <span class="spinner"></span>
+                <span class="btn-text">Procesar PDF</span>
+            </button>
+        </div>
     </form>
 
     <div class="help-text">
@@ -32,4 +45,55 @@
         <p>Despues de procesar, podes ver los movimientos y generar el reporte para ARCA.</p>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const area = document.getElementById('uploadArea');
+    const input = document.getElementById('archivo');
+    const fileNameEl = document.getElementById('fileName');
+    const form = document.getElementById('uploadForm');
+    const btn = document.getElementById('submitBtn');
+
+    // Click to open file picker
+    area.addEventListener('click', function() { input.click(); });
+
+    // Show filename on select
+    input.addEventListener('change', function() {
+        if (input.files.length > 0) {
+            fileNameEl.textContent = input.files[0].name;
+            fileNameEl.classList.add('visible');
+        }
+    });
+
+    // Drag & drop
+    ['dragenter', 'dragover'].forEach(function(evt) {
+        area.addEventListener(evt, function(e) {
+            e.preventDefault();
+            area.classList.add('dragover');
+        });
+    });
+    ['dragleave', 'drop'].forEach(function(evt) {
+        area.addEventListener(evt, function(e) {
+            e.preventDefault();
+            area.classList.remove('dragover');
+        });
+    });
+    area.addEventListener('drop', function(e) {
+        var files = e.dataTransfer.files;
+        if (files.length > 0 && files[0].name.toLowerCase().endsWith('.pdf')) {
+            input.files = files;
+            fileNameEl.textContent = files[0].name;
+            fileNameEl.classList.add('visible');
+        }
+    });
+
+    // Loading state on submit
+    form.addEventListener('submit', function() {
+        btn.classList.add('loading');
+        btn.disabled = true;
+    });
+});
+</script>
 {% endblock %}

@@ -1,17 +1,20 @@
 {% extends "base.html" %}
 
-{% block title %}Reporte Ley 25.413 - Lector de Resúmenes{% endblock %}
+{% block title %}Reporte Ley 25.413 - Lector de Resumenes{% endblock %}
 
 {% block content %}
-<h1>Reporte Impuesto Ley 25.413</h1>
-<p class="subtitle">Debitos y creditos bancarios para presentar a ARCA</p>
+<div class="page-header">
+    <h1>Reporte Impuesto Ley 25.413</h1>
+    <p class="subtitle">Debitos y creditos bancarios para presentar a ARCA</p>
+</div>
 
 {% if reporte %}
 <div class="card">
-    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-        <h2 style="margin: 0;">Detalle mensual</h2>
-        <a href="/reporte/descargar" class="btn btn-primary">Descargar XLSX</a>
+    <div class="card-header">
+        <h2>Detalle mensual</h2>
+        <a href="/reporte/descargar" class="btn btn-sm btn-success">Descargar XLSX</a>
     </div>
+    <div class="table-responsive">
     <table>
         <thead>
             <tr>
@@ -31,7 +34,7 @@
                 <td class="num">${{ "{:,.2f}".format(r.impuesto_sobre_debitos) }}</td>
                 <td class="num">
                     {% if r.devoluciones_debitos > 0 %}
-                    <span style="color: #27ae60;">-${{ "{:,.2f}".format(r.devoluciones_debitos) }}</span>
+                    <span style="color: var(--success);">-${{ "{:,.2f}".format(r.devoluciones_debitos) }}</span>
                     {% else %}
                     $0.00
                     {% endif %}
@@ -51,17 +54,21 @@
             <tr class="total-row">
                 <td><strong>TOTAL</strong></td>
                 <td class="num"><strong>${{ "{:,.2f}".format(ns.total_db) }}</strong></td>
-                <td class="num"><strong style="color: #27ae60;">-${{ "{:,.2f}".format(ns.total_dev) }}</strong></td>
+                <td class="num"><strong style="color: var(--success);">-${{ "{:,.2f}".format(ns.total_dev) }}</strong></td>
                 <td class="num"><strong>${{ "{:,.2f}".format(ns.total_db_neto) }}</strong></td>
                 <td class="num"><strong>${{ "{:,.2f}".format(ns.total_cr) }}</strong></td>
                 <td class="num"><strong>${{ "{:,.2f}".format(ns.total_neto) }}</strong></td>
             </tr>
         </tfoot>
     </table>
+    </div>
 </div>
 {% else %}
 <div class="card">
-    <p>No hay datos. <a href="/upload">Subi un extracto PDF</a> primero.</p>
+    <div class="empty-state">
+        <div class="empty-icon">&#128202;</div>
+        <p>No hay datos. <a href="/upload">Subi un extracto PDF</a> primero.</p>
+    </div>
 </div>
 {% endif %}
 {% endblock %}

@@ -3,18 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Lector de Resúmenes{% endblock %}</title>
+    <title>{% block title %}Lector de Resumenes{% endblock %}</title>
     <link rel="stylesheet" href="/static/style.css">
     <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    {% block head %}{% endblock %}
 </head>
 <body>
     <nav class="navbar">
-        <div class="nav-brand">Lector de Resúmenes Bancarios</div>
+        <div class="nav-brand">Lector de Resumenes</div>
         <div class="nav-links">
-            <a href="/" class="nav-link">Dashboard</a>
-            <a href="/upload" class="nav-link">Subir PDF</a>
-            <a href="/movimientos" class="nav-link">Movimientos</a>
-            <a href="/reporte" class="nav-link">Reporte Ley 25.413</a>
+            <a href="/" class="nav-link {{ 'active' if request.url.path == '/' else '' }}">
+                <span class="nav-icon">&#9632;</span> Dashboard
+            </a>
+            <a href="/upload" class="nav-link {{ 'active' if request.url.path == '/upload' else '' }}">
+                <span class="nav-icon">&#8679;</span> Subir PDF
+            </a>
+            <a href="/movimientos" class="nav-link {{ 'active' if '/movimientos' in request.url.path else '' }}">
+                <span class="nav-icon">&#9776;</span> Movimientos
+            </a>
+            <a href="/reporte" class="nav-link {{ 'active' if '/reporte' in request.url.path else '' }}">
+                <span class="nav-icon">&#9733;</span> Reporte Ley 25.413
+            </a>
         </div>
     </nav>
 
@@ -23,7 +32,9 @@
     </main>
 
     <footer class="footer">
-        <p>Estudio Contable &mdash; Lector de Resúmenes Bancarios v0.1.0</p>
+        Estudio Contable &mdash; Lector de Resumenes Bancarios v0.1.0
     </footer>
+
+    {% block scripts %}{% endblock %}
 </body>
 </html>

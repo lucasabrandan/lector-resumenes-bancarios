@@ -60,6 +60,7 @@ def listar_movimientos(
     tipo: str | None = None,
     fecha_desde: date | None = None,
     fecha_hasta: date | None = None,
+    buscar: str | None = None,
     limite: int = 100,
     offset: int = 0,
 ) -> list[MovimientoDB]:
@@ -74,8 +75,30 @@ def listar_movimientos(
         query = query.filter(MovimientoDB.fecha >= fecha_desde)
     if fecha_hasta:
         query = query.filter(MovimientoDB.fecha <= fecha_hasta)
+    if buscar:
+        query = query.filter(MovimientoDB.concepto.ilike(f"%{buscar}%"))
 
     return query.order_by(MovimientoDB.fecha, MovimientoDB.id).offset(offset).limit(limite).all()
+
+
+def contar_movimientos_filtrados(
+    db: Session,
+    tipo: str | None = None,
+    fecha_desde: date | None = None,
+    fecha_hasta: date | None = None,
+    buscar: str | None = None,
+) -> int:
+    """Total de movimientos con filtros aplicados."""
+    query = db.query(func.count(MovimientoDB.id))
+    if tipo:
+        query = query.filter(MovimientoDB.tipo == tipo)
+    if fecha_desde:
+        query = query.filter(MovimientoDB.fecha >= fecha_desde)
+    if fecha_hasta:
+        query = query.filter(MovimientoDB.fecha <= fecha_hasta)
+    if buscar:
+        query = query.filter(MovimientoDB.concepto.ilike(f"%{buscar}%"))
+    return query.scalar() or 0
 
 
 def contar_movimientos(db: Session) -> int:
@@ -96,3 +119,50 @@ def obtener_rango_fechas(db: Session) -> tuple[date | None, date | None]:
         func.max(MovimientoDB.fecha),
     ).first()
     return (resultado[0], resultado[1]) if resultado else (None, None)
+
+
+def distribucion_por_tipo(db: Session) -> list[dict]:
+    """Cantidad y total por tipo de movimiento, ordenado por cantidad desc."""
+    rows = (
+        db.query(
+            MovimientoDB.tipo,
+            func.count(MovimientoDB.id).label("cantidad"),
+            func.sum(MovimientoDB.importe).label("total"),
+        )
+        .group_by(MovimientoDB.tipo)
+        .order_by(func.count(MovimientoDB.id).desc())
+        .all()
+    )
+    return [{"tipo": r.tipo, "cantidad": r.cantidad, "total": float(r.total)} for r in rows]
+
+
+def distribucion_mensual(db: Session) -> dict:
+    """Distribucion por tipo agrupada por mes.
+
+    Returns:
+        Dict con clave "YYYY-MM" y valor lista de {tipo, cantidad, total}.
+    """
+    rows = (
+        db.query(
+            extract("year", MovimientoDB.fecha).label("anio"),
+            extract("month", MovimientoDB.fecha).label("mes"),
+            MovimientoDB.tipo,
+            func.count(MovimientoDB.id).label("cantidad"),
+            func.sum(MovimientoDB.importe).label("total"),
+        )
+        .group_by("anio", "mes", MovimientoDB.tipo)
+        .order_by("anio", "mes", func.count(MovimientoDB.id).desc())
+        .all()
+    )
+
+    resultado: dict[str, list[dict]] = {}
+    for r in rows:
+        clave = f"{int(r.anio)}-{int(r.mes):02d}"
+        if clave not in resultado:
+            resultado[clave] = []
+        resultado[clave].append({
+            "tipo": r.tipo,
+            "cantidad": r.cantidad,
+            "total": float(r.total),
+        })
+    return resultado
