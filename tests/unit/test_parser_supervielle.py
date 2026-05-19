@@ -270,3 +270,114 @@ class TestExtraerNumeroCuenta:
         match = parser._RE_NUMERO_CUENTA.search(texto)
         assert match is not None
         assert match.group("cuenta") == "12345678-001"
+
+
+# ============================================================================
+# Tests de líneas de detalle adicional (iteración 3.4)
+# ============================================================================
+
+
+class TestDetalleAdicional:
+    """El parser captura líneas de detalle que siguen a cada movimiento."""
+
+    def test_movimiento_sin_detalle(self, parser: ParserSupervielle):
+        """Un movimiento solo, sin líneas de continuación."""
+        texto = "03/01/24 Comisión Permanencia saldo DR 0970804935 30.00 -48,680.65"
+        crudos = parser._parsear_pagina(texto, num_pagina=1)
+        assert len(crudos) == 1
+        assert crudos[0].detalle_adicional is None
+
+    def test_movimiento_con_una_linea_detalle(self, parser: ParserSupervielle):
+        """Compra Visa con el nombre del comercio debajo."""
+        texto = (
+            "09/01/24 Compra Visa Débito 2692515355 26,200.00 -125,659.14\n"
+            "70760 MERPAGO DIEGO 0110 00:13"
+        )
+        crudos = parser._parsear_pagina(texto, num_pagina=1)
+        assert len(crudos) == 1
+        assert crudos[0].detalle_adicional == "70760 MERPAGO DIEGO 0110 00:13"
+
+    def test_movimiento_con_varias_lineas_detalle(self, parser: ParserSupervielle):
+        """Transferencia con 'Cuentas Propias' y CBU/CUIT destino."""
+        texto = (
+            "04/01/24 CRED BCA ELECTR INTERBANC EXEN 0002508600 60,000.00 11,201.31\n"
+            "Cuentas Propias\n"
+            "30717751848 FUNDICIONES VANELLA SRL"
+        )
+        crudos = parser._parsear_pagina(texto, num_pagina=1)
+        assert len(crudos) == 1
+        assert crudos[0].detalle_adicional == (
+            "Cuentas Propias\n30717751848 FUNDICIONES VANELLA SRL"
+        )
+
+    def test_pago_servicio_con_identificacion(self, parser: ParserSupervielle):
+        """Pago de servicios con comercio + IDENTIFICACION."""
+        texto = (
+            "19/01/24 Pago de Servicios 2633023378 8,397.28 250,478.66\n"
+            "626832 MOVISTARHOGAR 0119 15:09\n"
+            "IDENTIFICACION: 0530263259894"
+        )
+        crudos = parser._parsear_pagina(texto, num_pagina=1)
+        assert len(crudos) == 1
+        assert "MOVISTARHOGAR" in crudos[0].detalle_adicional
+        assert "IDENTIFICACION: 0530263259894" in crudos[0].detalle_adicional
+
+    def test_detalle_no_incluye_subtotal(self, parser: ParserSupervielle):
+        """SUBTOTAL es ruido del PDF, no detalle del movimiento."""
+        texto = (
+            "02/01/24 IVA 0207502811 0.01 -48,650.63\n"
+            "SUBTOTAL -48,650.63\n"
+            "1"
+        )
+        crudos = parser._parsear_pagina(texto, num_pagina=1)
+        assert len(crudos) == 1
+        assert crudos[0].detalle_adicional is None
+
+    def test_detalle_no_incluye_numero_pagina(self, parser: ParserSupervielle):
+        """Los números sueltos (paginado del PDF) no son detalle."""
+        texto = (
+            "02/01/24 IVA 0207502811 0.01 -48,650.63\n"
+            "2"
+        )
+        crudos = parser._parsear_pagina(texto, num_pagina=1)
+        assert len(crudos) == 1
+        assert crudos[0].detalle_adicional is None
+
+    def test_dos_movimientos_cada_uno_con_su_detalle(self, parser: ParserSupervielle):
+        """Cada movimiento recibe solo SUS líneas de detalle."""
+        texto = (
+            "03/01/24 Comisión Permanencia saldo DR 0970804935 30.00 -48,680.65\n"
+            "Operación 317063975 Generada el 03/01/24\n"
+            "03/01/24 IVA 0970804935 6.30 -48,686.95\n"
+            "Operación 317063975 Generada el 03/01/24"
+        )
+        crudos = parser._parsear_pagina(texto, num_pagina=1)
+        assert len(crudos) == 2
+        assert "317063975" in crudos[0].detalle_adicional
+        assert "317063975" in crudos[1].detalle_adicional
+
+    def test_movimiento_con_operacion_detalle(self, parser: ParserSupervielle):
+        """La línea 'Operación XXX Generada el...' es detalle real."""
+        texto = (
+            "02/01/24 Comisión Permanencia saldo DR 0970802127 30.00 -24,665.80\n"
+            "Operación 317060434 Generada el 02/01/24"
+        )
+        crudos = parser._parsear_pagina(texto, num_pagina=1)
+        assert len(crudos) == 1
+        assert crudos[0].detalle_adicional == "Operación 317060434 Generada el 02/01/24"
+
+    def test_detalle_no_incluye_headers_repetidos(self, parser: ParserSupervielle):
+        """Los headers que se repiten en cada página no son detalle."""
+        texto = (
+            "02/01/24 IVA 0207502811 0.01 -48,650.63\n"
+            "SUBTOTAL -48,650.63\n"
+            "1\n"
+            "I.V.A. RESPONSABLE INSCRIPTO - C.U.I.T. Nº 33-50000517-9\n"
+            "RESUMEN DE CUENTA DESDE 01/01/24 HASTA 24/06/25\n"
+            "CUENTA CORRIENTE EN PESOS Nro.: 05114474-003\n"
+            "DETALLE DE MOVIMIENTOS\n"
+            "Fecha Concepto Débito Crédito Saldo"
+        )
+        crudos = parser._parsear_pagina(texto, num_pagina=1)
+        assert len(crudos) == 1
+        assert crudos[0].detalle_adicional is None

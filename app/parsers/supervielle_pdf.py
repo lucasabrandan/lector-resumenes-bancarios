@@ -8,13 +8,13 @@ que UNO funcione bien antes de generalizar.
 
 Decisiones de diseño documentadas en: docs/adr/0005-parsear-pdf-no-xlsx.md
 
-Estado actual (Iteración 3.3):
+Estado actual (Iteración 3.4):
     ✅ Extracción cruda de movimientos del PDF con regex.
     ✅ Inferencia del signo (DEBITO/CREDITO) por variación de saldo.
     ✅ Validación cruzada: |variación de saldo| debe == monto.
     ✅ Conversión a MovimientoBancario (modelo de dominio).
     ✅ Clasificación automática del TipoMovimiento.
-    ⏳ Próxima iteración: manejo de líneas de detalle adicional.
+    ✅ Captura de líneas de detalle adicional (comercio, CBU, identificación).
 """
 
 from __future__ import annotations
@@ -103,6 +103,7 @@ class MovimientoCrudo:
     monto: Decimal             # SIEMPRE positivo (signo se infiere después)
     saldo_posterior: Decimal   # puede ser negativo si la cuenta está en sobregiro
     pagina: int                # para trazabilidad / debugging
+    detalle_adicional: str | None = None  # líneas que siguen al movimiento en el PDF
 
 
 # ============================================================================
@@ -143,6 +144,24 @@ class ParserSupervielle:
     # Ej: "CUENTA CORRIENTE EN PESOS Nro.: 05114474-003"
     _RE_NUMERO_CUENTA = re.compile(
         r"CUENTA\s+CORRIENTE\s+EN\s+PESOS\s+Nro\.?\s*:?\s*(?P<cuenta>[\d\-]+)",
+        re.IGNORECASE,
+    )
+
+    # Líneas que NO son detalle real del movimiento, aunque aparezcan
+    # justo después. Son ruido del formato del PDF (subtotales, paginado,
+    # headers repetidos).
+    _RE_NO_ES_DETALLE = re.compile(
+        r"^("
+        r"SUBTOTAL\b"
+        r"|Fecha\s+Concepto"
+        r"|DETALLE DE MOVIMIENTOS"
+        r"|CUENTA\s+CORRIENTE"
+        r"|RESUMEN\s+DE\s+CUENTA"
+        r"|I\.V\.A\.\s+RESPONSABLE"
+        r"|Banco\s+Supervielle"
+        r"|Saldo\s+del\s+per"
+        r"|\d{1,3}$"  # números de página sueltos: "1", "2", etc.
+        r")",
         re.IGNORECASE,
     )
 
@@ -191,13 +210,55 @@ class ParserSupervielle:
     # ------------------------------------------------------------------
 
     def _parsear_pagina(self, texto: str, num_pagina: int) -> list[MovimientoCrudo]:
-        """Extrae los movimientos crudos de UNA página del PDF."""
+        """Extrae los movimientos crudos de UNA página del PDF.
+
+        Acumula las líneas de detalle que siguen a cada movimiento
+        (comercio, CBU destino, identificación, etc.) y las adjunta
+        al MovimientoCrudo correspondiente.
+        """
         movimientos: list[MovimientoCrudo] = []
+        pendiente: MovimientoCrudo | None = None
+        detalles: list[str] = []
+
         for linea in texto.split("\n"):
-            crudo = self._parsear_linea(linea.strip(), num_pagina)
+            linea = linea.strip()
+            if not linea:
+                continue
+
+            crudo = self._parsear_linea(linea, num_pagina)
+
             if crudo is not None:
-                movimientos.append(crudo)
+                # Hay un movimiento nuevo: guardar el anterior con sus detalles
+                if pendiente is not None:
+                    movimientos.append(self._adjuntar_detalle(pendiente, detalles))
+                pendiente = crudo
+                detalles = []
+            elif pendiente is not None and not self._RE_NO_ES_DETALLE.match(linea):
+                # Línea de detalle real que sigue al movimiento
+                detalles.append(linea)
+
+        # Último movimiento de la página
+        if pendiente is not None:
+            movimientos.append(self._adjuntar_detalle(pendiente, detalles))
+
         return movimientos
+
+    @staticmethod
+    def _adjuntar_detalle(
+        crudo: MovimientoCrudo, detalles: list[str]
+    ) -> MovimientoCrudo:
+        """Crea un nuevo MovimientoCrudo con el detalle adjuntado (es frozen)."""
+        if not detalles:
+            return crudo
+        return MovimientoCrudo(
+            fecha=crudo.fecha,
+            concepto=crudo.concepto,
+            numero_operacion=crudo.numero_operacion,
+            monto=crudo.monto,
+            saldo_posterior=crudo.saldo_posterior,
+            pagina=crudo.pagina,
+            detalle_adicional="\n".join(detalles),
+        )
 
     def _parsear_linea(self, linea: str, num_pagina: int) -> MovimientoCrudo | None:
         """Intenta parsear UNA línea. Devuelve None si no es un movimiento."""
@@ -261,6 +322,7 @@ class ParserSupervielle:
                 cuenta=numero_cuenta,
                 fecha=crudo.fecha,
                 concepto=crudo.concepto,
+                detalle_adicional=crudo.detalle_adicional,
                 numero_operacion=crudo.numero_operacion,
                 importe=crudo.monto,
                 signo=signo,
