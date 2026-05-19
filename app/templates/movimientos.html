@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block title %}Movimientos - Lector de Resúmenes{% endblock %}
+
+{% block content %}
+<h1>Movimientos ({{ "{:,}".format(total) }})</h1>
+
+<div class="card">
+    <form method="get" action="/movimientos" class="filter-form">
+        <label for="tipo">Filtrar por tipo:</label>
+        <select name="tipo" id="tipo" onchange="this.form.submit()">
+            <option value="">Todos</option>
+            {% for t in tipos %}
+            <option value="{{ t }}" {{ "selected" if t == tipo_filtro else "" }}>{{ t }}</option>
+            {% endfor %}
+        </select>
+    </form>
+</div>
+
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>Fecha</th>
+                <th>Concepto</th>
+                <th>Tipo</th>
+                <th>Signo</th>
+                <th class="num">Importe</th>
+                <th class="num">Saldo</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for m in movimientos %}
+            <tr class="{{ 'row-credito' if m.signo == 'CREDITO' else 'row-debito' }}">
+                <td>{{ m.fecha }}</td>
+                <td>
+                    {{ m.concepto }}
+                    {% if m.detalle_adicional %}
+                    <div class="detalle">{{ m.detalle_adicional }}</div>
+                    {% endif %}
+                </td>
+                <td><span class="badge badge-{{ m.tipo | lower }}">{{ m.tipo }}</span></td>
+                <td>{{ m.signo }}</td>
+                <td class="num">${{ "{:,.2f}".format(m.importe) }}</td>
+                <td class="num">
+                    {% if m.saldo_posterior is not none %}
+                    ${{ "{:,.2f}".format(m.saldo_posterior) }}
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    {% if total_paginas > 1 %}
+    <div class="paginacion">
+        {% if pagina > 1 %}
+        <a href="/movimientos?pagina={{ pagina - 1 }}{{ '&tipo=' + tipo_filtro if tipo_filtro else '' }}" class="btn">&laquo; Anterior</a>
+        {% endif %}
+        <span>Pagina {{ pagina }} de {{ total_paginas }}</span>
+        {% if pagina < total_paginas %}
+        <a href="/movimientos?pagina={{ pagina + 1 }}{{ '&tipo=' + tipo_filtro if tipo_filtro else '' }}" class="btn">Siguiente &raquo;</a>
+        {% endif %}
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

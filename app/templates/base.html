@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Lector de Resúmenes{% endblock %}</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">Lector de Resúmenes Bancarios</div>
+        <div class="nav-links">
+            <a href="/" class="nav-link">Dashboard</a>
+            <a href="/upload" class="nav-link">Subir PDF</a>
+            <a href="/movimientos" class="nav-link">Movimientos</a>
+            <a href="/reporte" class="nav-link">Reporte Ley 25.413</a>
+        </div>
+    </nav>
+
+    <main class="container">
+        {% block content %}{% endblock %}
+    </main>
+
+    <footer class="footer">
+        <p>Estudio Contable &mdash; Lector de Resúmenes Bancarios v0.1.0</p>
+    </footer>
+</body>
+</html>

@@ -1,33 +1,41 @@
 """
 Entry point de la aplicación FastAPI.
 
-Por ahora es un "hola mundo" mínimo solo para verificar el setup.
-A medida que avancemos, vamos a registrar acá los routers de:
-  - app.api.routes.views (HTML server-rendered)
-  - app.api.routes.api   (JSON REST)
+Registra las rutas HTML (Jinja + HTMX) y crea las tablas al arrancar.
 """
 
+from contextlib import asynccontextmanager
+from pathlib import Path
+
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
+
+from app.db.base import crear_tablas
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    crear_tablas()
+    yield
+
 
 app = FastAPI(
     title="Lector de Resúmenes Bancarios",
     description="Procesador de extractos bancarios argentinos para ARCA.",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
+# Archivos estáticos (CSS, JS)
+_STATIC_DIR = Path(__file__).resolve().parent.parent / "static"
+_STATIC_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
 
-@app.get("/")
-async def root() -> dict[str, str]:
-    """Endpoint de salud — confirma que la app arrancó."""
-    return {
-        "status": "ok",
-        "app": "Lector de Resúmenes Bancarios",
-        "version": "0.1.0",
-        "docs": "/docs",
-    }
+# Rutas HTML
+from app.api.routes.views import router as views_router
+app.include_router(views_router)
 
 
 @app.get("/health")
 async def health() -> dict[str, str]:
-    """Endpoint para monitoring."""
     return {"status": "healthy"}

@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block title %}Subir PDF - Lector de Resúmenes{% endblock %}
+
+{% block content %}
+<h1>Subir extracto bancario</h1>
+
+<div class="card">
+    {% if error %}
+    <div class="alert alert-error">{{ error }}</div>
+    {% endif %}
+
+    {% if exito %}
+    <div class="alert alert-success">{{ exito }}</div>
+    {% endif %}
+
+    <form method="post" enctype="multipart/form-data" action="/upload">
+        <div class="form-group">
+            <label for="archivo">Archivo PDF del extracto (Banco Supervielle):</label>
+            <input type="file" id="archivo" name="archivo" accept=".pdf" required>
+        </div>
+        <button type="submit" class="btn btn-primary">Procesar PDF</button>
+    </form>
+
+    <div class="help-text">
+        <p>El sistema va a:</p>
+        <ol>
+            <li>Parsear el PDF y extraer todos los movimientos.</li>
+            <li>Clasificar cada movimiento automaticamente.</li>
+            <li>Guardar todo en la base de datos.</li>
+        </ol>
+        <p>Despues de procesar, podes ver los movimientos y generar el reporte para ARCA.</p>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+
+{% block title %}Reporte Ley 25.413 - Lector de Resúmenes{% endblock %}
+
+{% block content %}
+<h1>Reporte Impuesto Ley 25.413</h1>
+<p class="subtitle">Debitos y creditos bancarios para presentar a ARCA</p>
+
+{% if reporte %}
+<div class="card">
+    <table>
+        <thead>
+            <tr>
+                <th>Periodo</th>
+                <th class="num">Impuesto s/Debitos</th>
+                <th class="num">Impuesto s/Creditos</th>
+                <th class="num">Total del Mes</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% set ns = namespace(total_db=0, total_cr=0, total=0) %}
+            {% for r in reporte %}
+            <tr>
+                <td>{{ r.periodo }}</td>
+                <td class="num">${{ "{:,.2f}".format(r.impuesto_sobre_debitos) }}</td>
+                <td class="num">${{ "{:,.2f}".format(r.impuesto_sobre_creditos) }}</td>
+                <td class="num"><strong>${{ "{:,.2f}".format(r.total) }}</strong></td>
+            </tr>
+            {% set ns.total_db = ns.total_db + r.impuesto_sobre_debitos %}
+            {% set ns.total_cr = ns.total_cr + r.impuesto_sobre_creditos %}
+            {% set ns.total = ns.total + r.total %}
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr class="total-row">
+                <td><strong>TOTAL</strong></td>
+                <td class="num"><strong>${{ "{:,.2f}".format(ns.total_db) }}</strong></td>
+                <td class="num"><strong>${{ "{:,.2f}".format(ns.total_cr) }}</strong></td>
+                <td class="num"><strong>${{ "{:,.2f}".format(ns.total) }}</strong></td>
+            </tr>
+        </tfoot>
+    </table>
+</div>
+{% else %}
+<div class="card">
+    <p>No hay datos. <a href="/upload">Subi un extracto PDF</a> primero.</p>
+</div>
+{% endif %}
+{% endblock %}

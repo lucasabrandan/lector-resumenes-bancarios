@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - Lector de Resúmenes{% endblock %}
+
+{% block content %}
+<h1>Dashboard</h1>
+
+{% if total_movimientos == 0 %}
+<div class="card">
+    <h2>Sin datos</h2>
+    <p>No hay movimientos cargados todavia. <a href="/upload">Subi un extracto PDF</a> para empezar.</p>
+</div>
+{% else %}
+<div class="grid">
+    <div class="card stat-card">
+        <div class="stat-number">{{ "{:,}".format(resumen.total_movimientos) }}</div>
+        <div class="stat-label">Movimientos</div>
+    </div>
+    <div class="card stat-card">
+        <div class="stat-number">${{ "{:,.2f}".format(resumen.total_debitos) }}</div>
+        <div class="stat-label">Total Debitos ({{ resumen.cant_debitos }})</div>
+    </div>
+    <div class="card stat-card">
+        <div class="stat-number">${{ "{:,.2f}".format(resumen.total_creditos) }}</div>
+        <div class="stat-label">Total Creditos ({{ resumen.cant_creditos }})</div>
+    </div>
+    <div class="card stat-card">
+        <div class="stat-number">{{ resumen.fecha_desde }} a {{ resumen.fecha_hasta }}</div>
+        <div class="stat-label">Periodo</div>
+    </div>
+</div>
+
+{% if reporte_ley %}
+<div class="card">
+    <h2>Resumen Ley 25.413 por Mes</h2>
+    <table>
+        <thead>
+            <tr>
+                <th>Periodo</th>
+                <th class="num">Imp. s/Debitos</th>
+                <th class="num">Imp. s/Creditos</th>
+                <th class="num">Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in reporte_ley %}
+            <tr>
+                <td>{{ r.periodo }}</td>
+                <td class="num">${{ "{:,.2f}".format(r.impuesto_sobre_debitos) }}</td>
+                <td class="num">${{ "{:,.2f}".format(r.impuesto_sobre_creditos) }}</td>
+                <td class="num"><strong>${{ "{:,.2f}".format(r.total) }}</strong></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    <p><a href="/reporte">Ver reporte completo</a></p>
+</div>
+{% endif %}
+{% endif %}
+{% endblock %}
