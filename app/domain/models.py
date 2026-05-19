@@ -61,7 +61,12 @@ class TipoMovimiento(str, Enum):
     COMISION = "COMISION"
     IVA = "IVA"
     PERCEPCION_IVA = "PERCEPCION_IVA"
-    IMPUESTO_DEBITO_CREDITO = "IMPUESTO_DEBITO_CREDITO"  # Ley 25.413 (ARCA)
+    # El Impuesto Ley 25.413 (al cheque) se separa en dos categorías porque
+    # el banco lo reporta diferenciado: cuánto cobró sobre los débitos del
+    # mes y cuánto sobre los créditos. Es lo que va a ARCA por separado.
+    # Ver ADR-0006 para el por qué de la separación.
+    IMPUESTO_LEY_25413_SOBRE_DEBITOS = "IMPUESTO_LEY_25413_SOBRE_DEBITOS"
+    IMPUESTO_LEY_25413_SOBRE_CREDITOS = "IMPUESTO_LEY_25413_SOBRE_CREDITOS"
     IMPUESTO_SELLOS = "IMPUESTO_SELLOS"
     INTERES = "INTERES"
 

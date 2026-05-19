@@ -104,6 +104,56 @@ Por mes, su reporte tiene:
 
 ---
 
+## 2025-05-19 — Día 3: Parser real + descubrimiento del dominio (Ley 25.413)
+
+### Lo que hicimos (3 iteraciones)
+
+- **Iter 3.1**: Esqueleto del parser. Extracción cruda con regex, `MovimientoCrudo` como DTO interno, 16 tests.
+- **Iter 3.2**: Inferencia automática del signo (DEBITO/CREDITO) por variación de saldo. Excepción `ErrorValidacionSaldo` con detalles de debugging. Filosofía "fail loud, fail early". Extracción del número de cuenta del header del PDF.
+- **Iter 3.3**: Clasificador de tipos con patrón "Configuration over Code". 31 reglas regex en orden de prioridad. 90 tests.
+
+### Lo más importante que aprendí hoy
+
+**El dato real sigue corrigiendo el modelo.**
+
+Al validar nuestros totales contra los totales oficiales que el propio banco imprime al final del PDF (página 69), descubrimos que **el Impuesto Ley 25.413 NO es una categoría única**. ARCA y el banco lo separan en dos:
+- Impuesto sobre los **débitos** del mes (sufijo `/DB` en el concepto).
+- Impuesto sobre los **créditos** del mes (sufijo `/CR` en el concepto).
+
+Aunque ambos son débitos en la cuenta (sale plata), son métricas fiscales distintas. Esto NO se ve en el extracto a primera vista; tuvo que aparecer al comparar contra los totales oficiales mes a mes.
+
+**Lección**: la validación contra fuente externa confiable (en este caso, los propios totales del banco) es la única forma de descubrir distinciones del dominio que no son obvias en el dato crudo.
+
+Esto motivó el **ADR-0006**: refactorizar `IMPUESTO_DEBITO_CREDITO` en `IMPUESTO_LEY_25413_SOBRE_DEBITOS` e `IMPUESTO_LEY_25413_SOBRE_CREDITOS`.
+
+### Bugs cazados por los tests
+
+1. **Orden de reglas mal**: el clasificador inicial ponía `Compra Visa Débito` antes que `Reverso Compra Visa`, así que un reverso (devolución) se clasificaba como compra. Los tests lo detectaron al instante. Mismo problema con `Extracción ATM` vs `Devolución Extracción ATM`.
+2. **Falsa hipótesis sobre el signo**: al ver la diferencia en los totales, mi primera hipótesis fue que el signo del movimiento (DEBITO/CREDITO) distinguía los impuestos. La validación demostró que era falso: ambos son DEBITO. La distinción correcta era el sufijo del concepto.
+
+### Estadísticas del parser final
+
+- **1915 movimientos** parseados y validados al centavo en el PDF completo (70 páginas).
+- **Clasificación correcta**: 1914 de 1915 (99.95%). Solo 1 quedó como OTRO ("Débito por Pago de Multa", caso edge documentado).
+- **Distribución**: 47% impuestos Ley 25.413, 17% compras Visa, 7% IVA, etc.
+- **17 meses de extracto cuadrando** contra los totales oficiales del banco.
+
+### Recursos útiles encontrados hoy
+
+- `pytest.mark.parametrize`: permite definir tests de tipo "tabla de casos" sin escribir 40 funciones similares.
+- Compilación de regex al cargar el módulo: ahorra CPU si se usan miles de veces.
+
+### Próximos pasos
+
+1. Iteración 3.4: manejo de líneas de detalle adicional (las que siguen al movimiento principal en el PDF).
+2. Después: empezar la capa de persistencia con SQLAlchemy.
+
+### Pendientes descubiertos (para futuras iteraciones)
+
+- **Devoluciones de impuesto Ley 25.413**: al comparar contra los totales oficiales del banco, 5 meses tuvieron pequeñas diferencias positivas (entre $60 y $3.000). Investigando, descubrimos que el banco resta de su total mensual las "Devolución Imp. Débitos" que hace por reclamos. Nuestro parser las clasifica correctamente como `DEVOLUCION`, pero el **reporte final** debe saber que: `Impuesto neto del mes = total IMPUESTO_LEY_25413_SOBRE_DEBITOS − total DEVOLUCION imputables al impuesto`. Esto se implementará al hacer el módulo de reportes.
+
+---
+
 <!-- Plantilla para nuevas entradas:
 
 ## YYYY-MM-DD — Día N: Título corto

@@ -11,6 +11,7 @@ Cada decisión técnica importante del proyecto vive acá como un documento nume
 | [0003](0003-stack-tecnologico.md) | Stack: FastAPI + Pydantic + SQLAlchemy | ✅ Aceptado |
 | [0004](0004-frontend-jinja-htmx.md) | Frontend con Jinja2 + HTMX (MVP) | ✅ Aceptado |
 | [0005](0005-parsear-pdf-no-xlsx.md) | Parsear el PDF original, no el XLSX intermedio | ✅ Aceptado |
+| [0006](0006-tipos-impuesto-separados.md) | Separar el Impuesto Ley 25.413 en dos tipos | ✅ Aceptado |
 
 ## Cómo escribir un ADR nuevo
 

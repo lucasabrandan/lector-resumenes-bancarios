@@ -8,12 +8,13 @@ que UNO funcione bien antes de generalizar.
 
 Decisiones de diseño documentadas en: docs/adr/0005-parsear-pdf-no-xlsx.md
 
-Estado actual (Iteración 3.2):
+Estado actual (Iteración 3.3):
     ✅ Extracción cruda de movimientos del PDF con regex.
     ✅ Inferencia del signo (DEBITO/CREDITO) por variación de saldo.
     ✅ Validación cruzada: |variación de saldo| debe == monto.
     ✅ Conversión a MovimientoBancario (modelo de dominio).
-    ⏳ Próximas iteraciones: clasificación de tipo, detalle adicional.
+    ✅ Clasificación automática del TipoMovimiento.
+    ⏳ Próxima iteración: manejo de líneas de detalle adicional.
 """
 
 from __future__ import annotations
@@ -27,6 +28,7 @@ from pathlib import Path
 import pdfplumber
 
 from app.domain.models import MovimientoBancario, SignoMovimiento, TipoMovimiento
+from app.parsers.clasificador import clasificar
 
 
 # ============================================================================
@@ -263,7 +265,7 @@ class ParserSupervielle:
                 importe=crudo.monto,
                 signo=signo,
                 saldo_posterior=crudo.saldo_posterior,
-                tipo=TipoMovimiento.OTRO,  # clasificación viene en iter 3.4
+                tipo=clasificar(crudo.concepto),
                 pagina_origen=crudo.pagina,
             )
             movimientos.append(movimiento)

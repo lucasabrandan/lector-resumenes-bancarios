@@ -216,7 +216,11 @@ class TestCasosRealesSupervielle:
         assert mov.signo == SignoMovimiento.CREDITO
 
     def test_impuesto_ley_25413(self):
-        """El impuesto a los débitos/créditos: el output principal del sistema."""
+        """El movimiento clave para ARCA se modela correctamente.
+
+        Notar que distinguimos si el impuesto se aplicó sobre un débito o un
+        crédito (ver ADR-0006). El concepto termina en /DB en este caso.
+        """
         mov = MovimientoBancario(
             banco="SUPERVIELLE",
             cuenta="05114474-003",
@@ -226,9 +230,9 @@ class TestCasosRealesSupervielle:
             importe=Decimal("0.18"),
             signo=SignoMovimiento.DEBITO,
             saldo_posterior=Decimal("-24672.28"),
-            tipo=TipoMovimiento.IMPUESTO_DEBITO_CREDITO,
+            tipo=TipoMovimiento.IMPUESTO_LEY_25413_SOBRE_DEBITOS,
         )
-        assert mov.tipo == TipoMovimiento.IMPUESTO_DEBITO_CREDITO
+        assert mov.tipo == TipoMovimiento.IMPUESTO_LEY_25413_SOBRE_DEBITOS
         assert mov.importe == Decimal("0.18")
 
 
