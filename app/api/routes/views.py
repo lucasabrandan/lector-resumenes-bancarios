@@ -7,7 +7,7 @@ Estas son las páginas que ve la contadora en el navegador.
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, Request, UploadFile, File
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
@@ -18,7 +18,7 @@ from app.services.movimientos import (
     contar_movimientos,
     obtener_cuentas,
 )
-from app.reports.ley_25413 import generar_reporte_ley_25413, resumen_general
+from app.reports.ley_25413 import generar_reporte_ley_25413, resumen_general, exportar_reporte_xlsx
 
 router = APIRouter()
 
@@ -128,3 +128,14 @@ async def reporte_page(request: Request, db: Session = Depends(get_db)):
         "request": request,
         "reporte": reporte,
     })
+
+
+@router.get("/reporte/descargar")
+async def descargar_reporte(db: Session = Depends(get_db)):
+    reporte = generar_reporte_ley_25413(db)
+    xlsx = exportar_reporte_xlsx(reporte)
+    return StreamingResponse(
+        xlsx,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=reporte_ley_25413.xlsx"},
+    )

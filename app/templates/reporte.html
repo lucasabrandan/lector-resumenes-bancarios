@@ -8,35 +8,53 @@
 
 {% if reporte %}
 <div class="card">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+        <h2 style="margin: 0;">Detalle mensual</h2>
+        <a href="/reporte/descargar" class="btn btn-primary">Descargar XLSX</a>
+    </div>
     <table>
         <thead>
             <tr>
                 <th>Periodo</th>
-                <th class="num">Impuesto s/Debitos</th>
-                <th class="num">Impuesto s/Creditos</th>
-                <th class="num">Total del Mes</th>
+                <th class="num">Imp. s/Debitos (Bruto)</th>
+                <th class="num">Devoluciones</th>
+                <th class="num">Imp. s/Debitos (Neto)</th>
+                <th class="num">Imp. s/Creditos</th>
+                <th class="num">Total Neto</th>
             </tr>
         </thead>
         <tbody>
-            {% set ns = namespace(total_db=0, total_cr=0, total=0) %}
+            {% set ns = namespace(total_db=0, total_dev=0, total_db_neto=0, total_cr=0, total_neto=0) %}
             {% for r in reporte %}
             <tr>
                 <td>{{ r.periodo }}</td>
                 <td class="num">${{ "{:,.2f}".format(r.impuesto_sobre_debitos) }}</td>
+                <td class="num">
+                    {% if r.devoluciones_debitos > 0 %}
+                    <span style="color: #27ae60;">-${{ "{:,.2f}".format(r.devoluciones_debitos) }}</span>
+                    {% else %}
+                    $0.00
+                    {% endif %}
+                </td>
+                <td class="num">${{ "{:,.2f}".format(r.neto_sobre_debitos) }}</td>
                 <td class="num">${{ "{:,.2f}".format(r.impuesto_sobre_creditos) }}</td>
-                <td class="num"><strong>${{ "{:,.2f}".format(r.total) }}</strong></td>
+                <td class="num"><strong>${{ "{:,.2f}".format(r.total_neto) }}</strong></td>
             </tr>
             {% set ns.total_db = ns.total_db + r.impuesto_sobre_debitos %}
+            {% set ns.total_dev = ns.total_dev + r.devoluciones_debitos %}
+            {% set ns.total_db_neto = ns.total_db_neto + r.neto_sobre_debitos %}
             {% set ns.total_cr = ns.total_cr + r.impuesto_sobre_creditos %}
-            {% set ns.total = ns.total + r.total %}
+            {% set ns.total_neto = ns.total_neto + r.total_neto %}
             {% endfor %}
         </tbody>
         <tfoot>
             <tr class="total-row">
                 <td><strong>TOTAL</strong></td>
                 <td class="num"><strong>${{ "{:,.2f}".format(ns.total_db) }}</strong></td>
+                <td class="num"><strong style="color: #27ae60;">-${{ "{:,.2f}".format(ns.total_dev) }}</strong></td>
+                <td class="num"><strong>${{ "{:,.2f}".format(ns.total_db_neto) }}</strong></td>
                 <td class="num"><strong>${{ "{:,.2f}".format(ns.total_cr) }}</strong></td>
-                <td class="num"><strong>${{ "{:,.2f}".format(ns.total) }}</strong></td>
+                <td class="num"><strong>${{ "{:,.2f}".format(ns.total_neto) }}</strong></td>
             </tr>
         </tfoot>
     </table>
