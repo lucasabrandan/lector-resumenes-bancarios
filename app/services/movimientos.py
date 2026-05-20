@@ -19,6 +19,15 @@ from app.domain.models import MovimientoBancario, SignoMovimiento, TipoMovimient
 from app.parsers.supervielle_pdf import ParserSupervielle
 
 
+def archivo_ya_cargado(nombre_archivo: str, db: Session) -> int:
+    """Devuelve la cantidad de movimientos ya cargados de este archivo, o 0."""
+    return (
+        db.query(func.count(MovimientoDB.id))
+        .filter(MovimientoDB.archivo_origen == nombre_archivo)
+        .scalar() or 0
+    )
+
+
 def procesar_pdf(ruta_pdf: Path, db: Session) -> int:
     """Parsea un PDF de Supervielle y guarda los movimientos en la DB.
 
@@ -52,6 +61,41 @@ def procesar_pdf(ruta_pdf: Path, db: Session) -> int:
     db.add_all(registros)
     db.commit()
     return len(registros)
+
+
+def eliminar_por_archivo(nombre_archivo: str, db: Session) -> int:
+    """Elimina todos los movimientos de un archivo. Devuelve cantidad eliminada."""
+    cantidad = (
+        db.query(MovimientoDB)
+        .filter(MovimientoDB.archivo_origen == nombre_archivo)
+        .delete(synchronize_session=False)
+    )
+    db.commit()
+    return cantidad
+
+
+def listar_archivos_cargados(db: Session) -> list[dict]:
+    """Lista archivos procesados con stats."""
+    rows = (
+        db.query(
+            MovimientoDB.archivo_origen,
+            func.count(MovimientoDB.id).label("cantidad"),
+            func.min(MovimientoDB.fecha).label("fecha_min"),
+            func.max(MovimientoDB.fecha).label("fecha_max"),
+        )
+        .group_by(MovimientoDB.archivo_origen)
+        .order_by(MovimientoDB.archivo_origen)
+        .all()
+    )
+    return [
+        {
+            "archivo": r.archivo_origen,
+            "cantidad": r.cantidad,
+            "fecha_min": r.fecha_min,
+            "fecha_max": r.fecha_max,
+        }
+        for r in rows
+    ]
 
 
 def listar_movimientos(

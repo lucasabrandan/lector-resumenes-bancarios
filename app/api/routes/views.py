@@ -23,6 +23,9 @@ from app.services.movimientos import (
     obtener_cuentas,
     distribucion_por_tipo,
     distribucion_mensual,
+    archivo_ya_cargado,
+    eliminar_por_archivo,
+    listar_archivos_cargados,
 )
 from app.reports.ley_25413 import generar_reporte_ley_25413, resumen_general, exportar_reporte_xlsx
 
@@ -59,8 +62,11 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
 # --------------------------------------------------------------------------
 
 @router.get("/upload", response_class=HTMLResponse)
-async def upload_page(request: Request):
-    return templates.TemplateResponse("upload.html", {"request": request})
+async def upload_page(request: Request, db: Session = Depends(get_db)):
+    return templates.TemplateResponse("upload.html", {
+        "request": request,
+        "archivos": listar_archivos_cargados(db),
+    })
 
 
 @router.post("/upload")
@@ -69,11 +75,20 @@ async def upload_pdf(
     archivo: UploadFile = File(...),
     db: Session = Depends(get_db),
 ):
+    ctx = {"request": request, "archivos": listar_archivos_cargados(db)}
+
     if not archivo.filename or not archivo.filename.lower().endswith(".pdf"):
-        return templates.TemplateResponse("upload.html", {
-            "request": request,
-            "error": "Solo se aceptan archivos PDF.",
-        })
+        ctx["error"] = "Solo se aceptan archivos PDF."
+        return templates.TemplateResponse("upload.html", ctx)
+
+    # Detectar duplicado
+    existentes = archivo_ya_cargado(archivo.filename, db)
+    if existentes > 0:
+        ctx["error"] = (
+            f"El archivo '{archivo.filename}' ya fue cargado "
+            f"({existentes:,} movimientos). Eliminalo primero si queres reprocesarlo."
+        )
+        return templates.TemplateResponse("upload.html", ctx)
 
     # Guardar temporalmente
     tmp_dir = Path("data/uploads")
@@ -85,15 +100,31 @@ async def upload_pdf(
 
     try:
         cantidad = procesar_pdf(tmp_path, db)
-        return templates.TemplateResponse("upload.html", {
-            "request": request,
-            "exito": f"Se procesaron {cantidad:,} movimientos del archivo '{archivo.filename}'.",
-        })
+        ctx["archivos"] = listar_archivos_cargados(db)
+        ctx["exito"] = f"Se procesaron {cantidad:,} movimientos del archivo '{archivo.filename}'."
+        return templates.TemplateResponse("upload.html", ctx)
     except Exception as e:
-        return templates.TemplateResponse("upload.html", {
-            "request": request,
-            "error": f"Error al procesar el PDF: {e}",
-        })
+        ctx["error"] = f"Error al procesar el PDF: {e}"
+        return templates.TemplateResponse("upload.html", ctx)
+
+
+@router.post("/upload/eliminar")
+async def eliminar_archivo(
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    form = await request.form()
+    nombre = form.get("archivo")
+    if not nombre:
+        return RedirectResponse("/upload", status_code=303)
+
+    cantidad = eliminar_por_archivo(str(nombre), db)
+    ctx = {
+        "request": request,
+        "archivos": listar_archivos_cargados(db),
+        "exito": f"Se eliminaron {cantidad:,} movimientos del archivo '{nombre}'.",
+    }
+    return templates.TemplateResponse("upload.html", ctx)
 
 
 # --------------------------------------------------------------------------
