@@ -45,9 +45,17 @@ from app.services.clientes import (
     eliminar_cliente,
     asignar_usuarios,
     ids_clientes_de_usuario,
+    ids_clientes_no_monotributo,
 )
 from app.reports.ley_25413 import generar_reporte_ley_25413, resumen_general, exportar_reporte_xlsx
 from app.services.monotributo import generar_panel_monotributo, CATEGORIAS_MONOTRIBUTO
+from app.services.comprobantes import (
+    guardar_comprobantes,
+    archivo_comprobantes_ya_cargado,
+    eliminar_comprobantes_por_archivo,
+    listar_archivos_comprobantes,
+)
+from app.parsers.arca_comprobantes import parsear_archivo
 
 router = APIRouter()
 
@@ -81,7 +89,8 @@ async def dashboard(request: Request, db: Session = Depends(get_db)):
 
     if total > 0:
         context["resumen"] = resumen_general(db, cliente_ids=cids)
-        context["reporte_ley"] = generar_reporte_ley_25413(db, cliente_ids=cids)
+        cids_no_mono = ids_clientes_no_monotributo(db, cliente_ids=cids)
+        context["reporte_ley"] = generar_reporte_ley_25413(db, cliente_ids=cids_no_mono)
         context["distribucion"] = distribucion_por_tipo(db, cliente_ids=cids)
         context["dist_mensual_json"] = Markup(json.dumps(distribucion_mensual(db, cliente_ids=cids)))
 
@@ -235,14 +244,16 @@ async def movimientos_page(
 @router.get("/reporte", response_class=HTMLResponse)
 async def reporte_page(request: Request, db: Session = Depends(get_db)):
     cids = _get_cliente_ids(request, db)
-    reporte = generar_reporte_ley_25413(db, cliente_ids=cids)
+    cids_no_mono = ids_clientes_no_monotributo(db, cliente_ids=cids)
+    reporte = generar_reporte_ley_25413(db, cliente_ids=cids_no_mono)
     return templates.TemplateResponse("reporte.html", _ctx(request, reporte=reporte))
 
 
 @router.get("/reporte/descargar")
 async def descargar_reporte(request: Request, db: Session = Depends(get_db)):
     cids = _get_cliente_ids(request, db)
-    reporte = generar_reporte_ley_25413(db, cliente_ids=cids)
+    cids_no_mono = ids_clientes_no_monotributo(db, cliente_ids=cids)
+    reporte = generar_reporte_ley_25413(db, cliente_ids=cids_no_mono)
     xlsx = exportar_reporte_xlsx(reporte)
     return StreamingResponse(
         xlsx,
@@ -259,11 +270,70 @@ async def descargar_reporte(request: Request, db: Session = Depends(get_db)):
 async def monotributo_page(request: Request, db: Session = Depends(get_db)):
     cids = _get_cliente_ids(request, db)
     panel = generar_panel_monotributo(db, cliente_ids=cids)
+    usuario = getattr(request.state, "usuario", None)
+    clientes_mono = listar_clientes_de_usuario(usuario, db) if usuario else []
+    clientes_mono = [c for c in clientes_mono if c.categoria == "Monotributo"]
+    archivos_comp = listar_archivos_comprobantes(db)
     return templates.TemplateResponse("monotributo.html", _ctx(
         request,
         panel=panel,
         categorias_monotributo=CATEGORIAS_MONOTRIBUTO,
+        clientes_mono=clientes_mono,
+        archivos_comprobantes=archivos_comp,
     ))
+
+
+@router.post("/monotributo/upload")
+async def upload_comprobantes(request: Request, db: Session = Depends(get_db)):
+    """Sube un archivo de Mis Comprobantes ARCA (CSV/Excel)."""
+    form = await request.form()
+    archivo = form.get("archivo")
+    cliente_id_str = str(form.get("cliente_id", ""))
+    cliente_id = int(cliente_id_str) if cliente_id_str else None
+
+    if not archivo or not getattr(archivo, "filename", None):
+        return RedirectResponse("/monotributo?error=Selecciona+un+archivo", status_code=303)
+
+    ext = archivo.filename.lower().rsplit(".", 1)[-1] if "." in archivo.filename else ""
+    if ext not in ("csv", "xlsx", "xls"):
+        return RedirectResponse("/monotributo?error=Solo+CSV+o+Excel", status_code=303)
+
+    if not cliente_id:
+        return RedirectResponse("/monotributo?error=Selecciona+un+cliente", status_code=303)
+
+    # Detectar duplicado
+    existentes = archivo_comprobantes_ya_cargado(archivo.filename, cliente_id, db)
+    if existentes > 0:
+        return RedirectResponse(
+            f"/monotributo?error=Archivo+ya+cargado+({existentes}+comprobantes)", status_code=303
+        )
+
+    contenido = await archivo.read()
+    try:
+        comprobantes = parsear_archivo(archivo.filename, contenido)
+    except Exception as e:
+        return RedirectResponse(f"/monotributo?error=Error+al+parsear:+{e}", status_code=303)
+
+    if not comprobantes:
+        return RedirectResponse("/monotributo?error=No+se+encontraron+comprobantes", status_code=303)
+
+    cantidad = guardar_comprobantes(comprobantes, cliente_id, archivo.filename, db)
+    return RedirectResponse(f"/monotributo?exito=Se+cargaron+{cantidad}+comprobantes", status_code=303)
+
+
+@router.post("/monotributo/eliminar-archivo")
+async def eliminar_archivo_comprobantes(request: Request, db: Session = Depends(get_db)):
+    """Elimina comprobantes de un archivo cargado."""
+    form = await request.form()
+    archivo = str(form.get("archivo", ""))
+    cliente_id = int(str(form.get("cliente_id", "0")))
+
+    if archivo and cliente_id:
+        eliminados = eliminar_comprobantes_por_archivo(archivo, cliente_id, db)
+        return RedirectResponse(
+            f"/monotributo?exito=Se+eliminaron+{eliminados}+comprobantes", status_code=303
+        )
+    return RedirectResponse("/monotributo", status_code=303)
 
 
 # --------------------------------------------------------------------------
@@ -280,6 +350,16 @@ ETIQUETAS_PERMISOS = {
     "usuarios": "Gestionar usuarios",
 }
 
+DESCRIPCIONES_PERMISOS = {
+    "dashboard": "ver resumen general",
+    "upload": "subir extractos bancarios",
+    "movimientos": "ver lista de movimientos",
+    "reporte": "ver y descargar reporte Ley 25.413",
+    "monotributo": "ver panel de monotributo y cargar comprobantes",
+    "clientes": "crear, editar y eliminar clientes",
+    "usuarios": "administrar usuarios y permisos",
+}
+
 
 @router.get("/usuarios", response_class=HTMLResponse)
 async def usuarios_page(request: Request, db: Session = Depends(get_db)):
@@ -288,6 +368,7 @@ async def usuarios_page(request: Request, db: Session = Depends(get_db)):
         usuarios=listar_usuarios(db),
         todos_los_permisos=TODOS_LOS_PERMISOS,
         etiquetas=ETIQUETAS_PERMISOS,
+        descripciones=DESCRIPCIONES_PERMISOS,
     ))
 
 
@@ -303,6 +384,7 @@ async def usuarios_crear(request: Request, db: Session = Depends(get_db)):
         usuarios=listar_usuarios(db),
         todos_los_permisos=TODOS_LOS_PERMISOS,
         etiquetas=ETIQUETAS_PERMISOS,
+        descripciones=DESCRIPCIONES_PERMISOS,
     )
 
     if not username or not password or not nombre:
@@ -333,6 +415,7 @@ async def usuarios_editar_form(request: Request, usuario_id: int, db: Session = 
         usuario_edit=usuario_edit,
         todos_los_permisos=TODOS_LOS_PERMISOS,
         etiquetas=ETIQUETAS_PERMISOS,
+        descripciones=DESCRIPCIONES_PERMISOS,
     ))
 
 
@@ -353,6 +436,7 @@ async def usuarios_editar(request: Request, usuario_id: int, db: Session = Depen
         usuario_edit=usuario_edit,
         todos_los_permisos=TODOS_LOS_PERMISOS,
         etiquetas=ETIQUETAS_PERMISOS,
+        descripciones=DESCRIPCIONES_PERMISOS,
         exito="Usuario actualizado.",
     ))
 

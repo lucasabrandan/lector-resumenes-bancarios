@@ -29,8 +29,12 @@
         </p>
     </div>
     <div class="dash-actions">
+        {% if usuario and usuario.tiene_permiso('upload') %}
         <a href="/upload" class="btn btn-primary"><span>&#8679;</span> Subir PDF</a>
+        {% endif %}
+        {% if usuario and usuario.tiene_permiso('reporte') %}
         <a href="/reporte/descargar" class="btn btn-success"><span>&#8681;</span> Descargar XLSX</a>
+        {% endif %}
     </div>
 </div>
 
@@ -57,6 +61,7 @@
             <div class="stat-label">Creditos ({{ "{:,}".format(resumen.cant_creditos) }})</div>
         </div>
     </div>
+    {% if usuario and usuario.tiene_permiso('reporte') %}
     <div class="card stat-card">
         <div class="stat-icon stat-icon-purple">&#9733;</div>
         <div class="stat-body">
@@ -66,28 +71,34 @@
             <div class="stat-label">Total Imp. Ley 25.413</div>
         </div>
     </div>
+    {% endif %}
 </div>
 
 {# --- Month selector + charts --- #}
+{% set puede_ver_reporte = usuario and usuario.tiene_permiso('reporte') %}
 <div class="card">
     <div class="card-header">
         <h2>Detalle por Mes</h2>
         <div class="filter-group">
             <select id="mesSelector" style="min-width: 180px;">
                 <option value="todos">Todos los meses</option>
+                {% if puede_ver_reporte %}
                 {% for r in reporte_ley %}
                 <option value="{{ r.anio }}-{{ '%02d' | format(r.mes) }}">{{ r.periodo }}</option>
                 {% endfor %}
+                {% endif %}
             </select>
         </div>
     </div>
     <div class="grid grid-2" style="margin-bottom: 0;">
+        {% if puede_ver_reporte %}
         <div>
             <h3 style="font-size: 0.9rem; color: var(--text-light); margin-bottom: 0.5rem;">Impuesto Ley 25.413</h3>
             <div class="chart-container">
                 <canvas id="chartLey25413"></canvas>
             </div>
         </div>
+        {% endif %}
         <div>
             <h3 style="font-size: 0.9rem; color: var(--text-light); margin-bottom: 0.5rem;" id="donutTitle">Importes por tipo (todos los meses)</h3>
             <div class="chart-container">
@@ -110,7 +121,7 @@
 </div>
 
 {# --- Reporte table --- #}
-{% if reporte_ley %}
+{% if puede_ver_reporte and reporte_ley %}
 <div class="card">
     <div class="card-header">
         <h2>Resumen Ley 25.413</h2>
@@ -166,6 +177,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Data from backend
     var reporteLey = [
+        {% if puede_ver_reporte %}
         {% for r in reporte_ley %}{
             periodo: '{{ r.periodo }}',
             label: '{{ r.mes_nombre[:3] }} {{ r.anio }}',
@@ -173,6 +185,7 @@ document.addEventListener('DOMContentLoaded', function() {
             debitos: {{ r.impuesto_sobre_debitos }},
             creditos: {{ r.impuesto_sobre_creditos }}
         }{% if not loop.last %},{% endif %}{% endfor %}
+        {% endif %}
     ];
 
     var distGlobal = [{% for d in distribucion %}{tipo:'{{ d.tipo }}',cantidad:{{ d.cantidad }},total:{{ d.total }}}{% if not loop.last %},{% endif %}{% endfor %}];
@@ -180,6 +193,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     var selectedMonth = 'todos';
 
+    {% if puede_ver_reporte %}
     // --- Bar chart ---
     var ctxBar = document.getElementById('chartLey25413').getContext('2d');
     var barChart = new Chart(ctxBar, {
@@ -232,6 +246,7 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     });
+    {% endif %}
 
     // --- Donut chart ---
     var ctxDonut = document.getElementById('chartDistribucion').getContext('2d');
@@ -288,6 +303,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function highlightBar(monthKey) {
+        if (typeof barChart === 'undefined') return;
         var ds0bg = [], ds1bg = [];
         for (var i = 0; i < reporteLey.length; i++) {
             if (monthKey === 'todos' || reporteLey[i].key === monthKey) {

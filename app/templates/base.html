@@ -12,7 +12,7 @@
     <nav class="navbar">
         <div class="nav-brand">Lector de Resumenes</div>
         <div class="nav-links" style="display:flex; align-items:center; gap:0; flex:1;">
-            {% if not usuario or usuario.tiene_permiso('dashboard') %}
+            {% if usuario and usuario.tiene_permiso('dashboard') %}
             <a href="/" class="nav-link {{ 'active' if request.url.path == '/' else '' }}">
                 <span class="nav-icon">&#9632;</span> Dashboard
             </a>
@@ -22,12 +22,12 @@
                 <span class="nav-icon">&#8679;</span> Subir PDF
             </a>
             {% endif %}
-            {% if not usuario or usuario.tiene_permiso('movimientos') %}
+            {% if usuario and usuario.tiene_permiso('movimientos') %}
             <a href="/movimientos" class="nav-link {{ 'active' if '/movimientos' in request.url.path else '' }}">
                 <span class="nav-icon">&#9776;</span> Movimientos
             </a>
             {% endif %}
-            {% if not usuario or usuario.tiene_permiso('reporte') %}
+            {% if usuario and usuario.tiene_permiso('reporte') %}
             <a href="/reporte" class="nav-link {{ 'active' if '/reporte' in request.url.path else '' }}">
                 <span class="nav-icon">&#9733;</span> Reporte Ley 25.413
             </a>

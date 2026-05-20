@@ -37,10 +37,13 @@
             <label style="font-size:0.85rem; font-weight:600; display:block; margin-bottom:0.5rem;">Permisos</label>
             <div style="display:flex; gap:1.5rem; flex-wrap:wrap;">
                 {% for permiso in todos_los_permisos %}
-                <label style="display:flex; align-items:center; gap:0.4rem; font-size:0.9rem; cursor:pointer;">
+                <label style="display:flex; align-items:center; gap:0.4rem; font-size:0.9rem; cursor:pointer;" title="{{ descripciones.get(permiso, '') }}">
                     <input type="checkbox" name="permisos" value="{{ permiso }}"
-                        {{ 'checked' if permiso != 'usuarios' else '' }}>
+                        {{ 'checked' if permiso == 'dashboard' else '' }}>
                     {{ etiquetas.get(permiso, permiso) }}
+                    {% if descripciones.get(permiso) %}
+                    <span style="color:var(--text-light); font-size:0.75rem;">({{ descripciones[permiso] }})</span>
+                    {% endif %}
                 </label>
                 {% endfor %}
             </div>

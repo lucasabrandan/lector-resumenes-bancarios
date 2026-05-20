@@ -38,6 +38,7 @@ PERMISOS_RUTA: dict[str, str] = {
 
 # Prefijos de ruta -> permiso (para rutas dinamicas como /usuarios/1/editar)
 PERMISOS_PREFIJO: dict[str, str] = {
+    "/monotributo": "monotributo",
     "/clientes": "clientes",
     "/usuarios": "usuarios",
 }
