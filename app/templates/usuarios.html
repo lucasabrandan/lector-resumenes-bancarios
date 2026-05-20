@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Usuarios — Lector de Resumenes{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Gestion de Usuarios</h1>
+    <p class="subtitle">Crear, editar y administrar accesos al sistema.</p>
+</div>
+
+{% if error %}
+<div class="alert alert-error">{{ error }}</div>
+{% endif %}
+{% if exito %}
+<div class="alert alert-success">{{ exito }}</div>
+{% endif %}
+
+<!-- Formulario crear usuario -->
+<div class="card">
+    <h2>Nuevo usuario</h2>
+    <form method="post" action="/usuarios/crear">
+        <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:1rem; margin-bottom:1rem;">
+            <div class="filter-group">
+                <label for="username">Usuario</label>
+                <input type="text" id="username" name="username" required placeholder="ej: jperez" style="width:100%; height:38px;">
+            </div>
+            <div class="filter-group">
+                <label for="nombre">Nombre completo</label>
+                <input type="text" id="nombre" name="nombre" required placeholder="ej: Juan Perez" style="width:100%; height:38px;">
+            </div>
+            <div class="filter-group">
+                <label for="password">Contrasena</label>
+                <input type="password" id="password" name="password" required placeholder="Contrasena inicial" style="width:100%; height:38px;">
+            </div>
+        </div>
+
+        <div style="margin-bottom:1rem;">
+            <label style="font-size:0.85rem; font-weight:600; display:block; margin-bottom:0.5rem;">Permisos</label>
+            <div style="display:flex; gap:1.5rem; flex-wrap:wrap;">
+                {% for permiso in todos_los_permisos %}
+                <label style="display:flex; align-items:center; gap:0.4rem; font-size:0.9rem; cursor:pointer;">
+                    <input type="checkbox" name="permisos" value="{{ permiso }}"
+                        {{ 'checked' if permiso != 'usuarios' else '' }}>
+                    {{ etiquetas.get(permiso, permiso) }}
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary">Crear usuario</button>
+    </form>
+</div>
+
+<!-- Lista de usuarios -->
+<div class="card">
+    <h2>Usuarios registrados</h2>
+    <div class="table-responsive">
+        <table>
+            <thead>
+                <tr>
+                    <th>Usuario</th>
+                    <th>Nombre</th>
+                    <th>Permisos</th>
+                    <th>Estado</th>
+                    <th>Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for u in usuarios %}
+                <tr>
+                    <td><strong>{{ u.username }}</strong></td>
+                    <td>{{ u.nombre }}</td>
+                    <td>
+                        {% for p in u.lista_permisos() %}
+                        <span class="badge">{{ etiquetas.get(p, p) }}</span>
+                        {% endfor %}
+                    </td>
+                    <td>
+                        {% if u.activo %}
+                        <span class="badge" style="background:var(--success-light); color:var(--success);">Activo</span>
+                        {% else %}
+                        <span class="badge" style="background:var(--error-light); color:var(--error);">Inactivo</span>
+                        {% endif %}
+                    </td>
+                    <td style="display:flex; gap:0.5rem;">
+                        <a href="/usuarios/{{ u.id }}/editar" class="btn btn-sm">Editar</a>
+                        {% if usuario and u.id != usuario.id %}
+                        <form method="post" action="/usuarios/{{ u.id }}/eliminar"
+                              onsubmit="return confirm('Eliminar a {{ u.username }}?')">
+                            <button type="submit" class="btn btn-sm btn-danger">Eliminar</button>
+                        </form>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}Editar {{ cliente.nombre }} — Lector de Resumenes{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Editar cliente: {{ cliente.nombre }}</h1>
+    <p class="subtitle">Modificar datos y asignar usuarios.</p>
+</div>
+
+{% if exito %}
+<div class="alert alert-success">{{ exito }}</div>
+{% endif %}
+
+<div class="card">
+    <form method="post" action="/clientes/{{ cliente.id }}/editar">
+        <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:1rem; margin-bottom:1rem;">
+            <div class="filter-group">
+                <label for="nombre">Nombre / Razon Social</label>
+                <input type="text" id="nombre" name="nombre" value="{{ cliente.nombre }}" required style="width:100%; height:38px;">
+            </div>
+            <div class="filter-group">
+                <label for="cuit">CUIT</label>
+                <input type="text" id="cuit" name="cuit" value="{{ cliente.cuit or '' }}" placeholder="ej: 30-12345678-9" style="width:100%; height:38px;">
+            </div>
+            <div class="filter-group">
+                <label for="categoria">Categoria</label>
+                <select id="categoria" name="categoria" style="width:100%; height:38px;">
+                    {% for cat in categorias %}
+                    <option value="{{ cat }}" {{ 'selected' if cat == cliente.categoria else '' }}>{{ cat }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        <!-- Datos de monotributo (se muestran si categoria = Monotributo) -->
+        <div id="monotributo-fields" style="margin-bottom:1rem; padding:1rem; background:var(--bg-secondary, #f8f9fa); border-radius:8px; {% if cliente.categoria != 'Monotributo' %}display:none;{% endif %}">
+            <label style="font-size:0.85rem; font-weight:600; display:block; margin-bottom:0.75rem;">Datos de Monotributo</label>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem;">
+                <div class="filter-group">
+                    <label for="categoria_monotributo">Categoria ARCA</label>
+                    <select id="categoria_monotributo" name="categoria_monotributo" style="width:100%; height:38px;">
+                        <option value="">-- Sin asignar --</option>
+                        {% for cat in categorias_monotributo %}
+                        <option value="{{ cat }}" {{ 'selected' if cat == cliente.categoria_monotributo else '' }}>Categoria {{ cat }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="actividad_monotributo">Actividad</label>
+                    <select id="actividad_monotributo" name="actividad_monotributo" style="width:100%; height:38px;">
+                        <option value="servicios" {{ 'selected' if cliente.actividad_monotributo == 'servicios' else '' }}>Servicios</option>
+                        <option value="comercio" {{ 'selected' if cliente.actividad_monotributo == 'comercio' else '' }}>Comercio</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <div style="margin-bottom:1rem;">
+            <label style="font-size:0.85rem; font-weight:600; display:block; margin-bottom:0.5rem;">Usuarios asignados</label>
+            <p style="font-size:0.8rem; color:var(--text-light); margin-bottom:0.5rem;">
+                Estos usuarios podran ver los movimientos de este cliente.
+            </p>
+            <div style="display:flex; gap:1.5rem; flex-wrap:wrap;">
+                {% for u in usuarios %}
+                <label style="display:flex; align-items:center; gap:0.4rem; font-size:0.9rem; cursor:pointer;">
+                    <input type="checkbox" name="usuarios" value="{{ u.id }}"
+                        {{ 'checked' if u.id in usuarios_asignados else '' }}>
+                    {{ u.nombre }} <span style="color:var(--text-light);">({{ u.username }})</span>
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div style="margin-bottom:1.5rem;">
+            <label style="display:flex; align-items:center; gap:0.5rem; font-size:0.9rem; cursor:pointer;">
+                <input type="checkbox" name="activo" {{ 'checked' if cliente.activo else '' }}>
+                <strong>Cliente activo</strong>
+            </label>
+        </div>
+
+        <div style="display:flex; gap:0.75rem;">
+            <button type="submit" class="btn btn-primary">Guardar cambios</button>
+            <a href="/clientes" class="btn">Volver</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var catSelect = document.getElementById('categoria');
+    var monoFields = document.getElementById('monotributo-fields');
+    catSelect.addEventListener('change', function() {
+        monoFields.style.display = catSelect.value === 'Monotributo' ? '' : 'none';
+    });
+});
+</script>
+{% endblock %}

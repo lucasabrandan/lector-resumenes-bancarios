@@ -35,4 +35,5 @@ def get_db():
 
 def crear_tablas():
     """Crea todas las tablas. Para desarrollo rápido, sin Alembic."""
+    import app.db.models  # noqa: F401 — registra todos los modelos antes de create_all
     Base.metadata.create_all(bind=engine)

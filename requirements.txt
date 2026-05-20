@@ -10,6 +10,10 @@ pydantic-settings==2.6.0
 jinja2==3.1.4
 python-multipart==0.0.12  # para upload de archivos
 
+# --- Auth ---
+itsdangerous==2.2.0
+python-dotenv==1.2.2
+
 # --- Parsing de archivos ---
 pdfplumber==0.11.4        # PDFs bancarios
 pandas==2.2.3             # Excel/CSV

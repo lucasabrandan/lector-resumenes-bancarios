@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}Panel Monotributo — Lector de Resumenes{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Panel de Control — Monotributo</h1>
+    {% if panel %}
+    <p class="subtitle">Semestre: {{ panel[0].semestre_label }} — Control de topes de facturacion por cliente</p>
+    {% else %}
+    <p class="subtitle">Control de topes de facturacion por cliente monotributista.</p>
+    {% endif %}
+</div>
+
+{% if not panel %}
+<div class="card">
+    <p style="color:var(--text-light); text-align:center; padding:2rem 0;">
+        No hay clientes monotributistas configurados.<br>
+        Para usar este panel, edita un cliente con categoria "Monotributo" y asignale una categoria ARCA (A-K).
+    </p>
+    {% if usuario and usuario.tiene_permiso('clientes') %}
+    <div style="text-align:center;">
+        <a href="/clientes" class="btn btn-primary">Ir a Clientes</a>
+    </div>
+    {% endif %}
+</div>
+{% else %}
+
+<!-- Resumen rapido -->
+<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:1rem; margin-bottom:1.5rem;">
+    <div class="card" style="text-align:center; padding:1.25rem;">
+        <div style="font-size:2rem; font-weight:700;">{{ panel | length }}</div>
+        <div style="font-size:0.85rem; color:var(--text-light);">Monotributistas</div>
+    </div>
+    <div class="card" style="text-align:center; padding:1.25rem;">
+        {% set criticos = panel | selectattr('estado', 'equalto', 'critico') | list %}
+        <div style="font-size:2rem; font-weight:700; color:{% if criticos %}var(--error){% else %}var(--success){% endif %};">{{ criticos | length }}</div>
+        <div style="font-size:0.85rem; color:var(--text-light);">En estado critico (&ge;95%)</div>
+    </div>
+    <div class="card" style="text-align:center; padding:1.25rem;">
+        {% set alertas = panel | selectattr('estado', 'equalto', 'alerta') | list %}
+        <div style="font-size:2rem; font-weight:700; color:{% if alertas %}#e67e22{% else %}var(--success){% endif %};">{{ alertas | length }}</div>
+        <div style="font-size:0.85rem; color:var(--text-light);">En alerta (&ge;80%)</div>
+    </div>
+    <div class="card" style="text-align:center; padding:1.25rem;">
+        {% set ok = panel | selectattr('estado', 'equalto', 'ok') | list %}
+        <div style="font-size:2rem; font-weight:700; color:var(--success);">{{ ok | length }}</div>
+        <div style="font-size:0.85rem; color:var(--text-light);">OK (&lt;60%)</div>
+    </div>
+</div>
+
+<!-- Tabla principal -->
+<div class="card">
+    <h2>Detalle por cliente</h2>
+    <div class="table-responsive">
+        <table>
+            <thead>
+                <tr>
+                    <th>Cliente</th>
+                    <th>CUIT</th>
+                    <th style="text-align:center;">Cat.</th>
+                    <th style="text-align:center;">Actividad</th>
+                    <th class="num">Tope semestral</th>
+                    <th class="num">Acumulado</th>
+                    <th class="num">Disponible</th>
+                    <th style="width:180px;">% Usado</th>
+                    <th style="text-align:center;">Estado</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in panel %}
+                <tr>
+                    <td><strong>{{ r.nombre }}</strong></td>
+                    <td>{{ r.cuit or '-' }}</td>
+                    <td style="text-align:center;"><span class="badge">{{ r.categoria }}</span></td>
+                    <td style="text-align:center; font-size:0.85rem;">{{ r.actividad | capitalize }}</td>
+                    <td class="num">${{ "{:,.2f}".format(r.tope_semestral) }}</td>
+                    <td class="num">${{ "{:,.2f}".format(r.acumulado_creditos) }}</td>
+                    <td class="num" style="color:{% if r.disponible < 0 %}var(--error){% else %}inherit{% endif %};">
+                        ${{ "{:,.2f}".format(r.disponible) }}
+                    </td>
+                    <td>
+                        <div class="progress-bar-container" style="background:var(--border); border-radius:4px; height:22px; position:relative; overflow:hidden;">
+                            <div class="progress-bar-fill" style="
+                                width:{{ [r.porcentaje_usado, 100] | min }}%;
+                                height:100%;
+                                border-radius:4px;
+                                background:{% if r.estado == 'critico' %}var(--error){% elif r.estado == 'alerta' %}#e67e22{% elif r.estado == 'atencion' %}#f39c12{% else %}var(--success){% endif %};
+                                transition: width 0.3s;
+                            "></div>
+                            <span style="position:absolute; top:0; left:0; right:0; bottom:0; display:flex; align-items:center; justify-content:center; font-size:0.75rem; font-weight:600;">
+                                {{ "%.1f" | format(r.porcentaje_usado) }}%
+                            </span>
+                        </div>
+                    </td>
+                    <td style="text-align:center;">
+                        {% if r.estado == 'critico' %}
+                        <span class="badge" style="background:var(--error-light); color:var(--error); font-weight:700;">CRITICO</span>
+                        {% elif r.estado == 'alerta' %}
+                        <span class="badge" style="background:#fdebd0; color:#e67e22; font-weight:700;">ALERTA</span>
+                        {% elif r.estado == 'atencion' %}
+                        <span class="badge" style="background:#fef9e7; color:#f39c12;">ATENCION</span>
+                        {% else %}
+                        <span class="badge" style="background:var(--success-light); color:var(--success);">OK</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<!-- Leyenda -->
+<div class="card" style="font-size:0.85rem; color:var(--text-light);">
+    <strong>Leyenda:</strong>
+    Los topes corresponden al semestre vigente (anual / 2). La recategorizacion se realiza en enero y julio.
+    El acumulado se calcula sumando los creditos (ingresos) bancarios del semestre actual.
+    <br><br>
+    <strong>Estados:</strong>
+    <span style="color:var(--success);">OK</span> (&lt;60%) —
+    <span style="color:#f39c12;">ATENCION</span> (&ge;60%) —
+    <span style="color:#e67e22;">ALERTA</span> (&ge;80%) —
+    <span style="color:var(--error);">CRITICO</span> (&ge;95%)
+</div>
+{% endif %}
+{% endblock %}

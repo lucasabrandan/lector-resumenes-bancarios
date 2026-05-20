@@ -11,18 +11,44 @@
 <body>
     <nav class="navbar">
         <div class="nav-brand">Lector de Resumenes</div>
-        <div class="nav-links">
+        <div class="nav-links" style="display:flex; align-items:center; gap:0; flex:1;">
+            {% if not usuario or usuario.tiene_permiso('dashboard') %}
             <a href="/" class="nav-link {{ 'active' if request.url.path == '/' else '' }}">
                 <span class="nav-icon">&#9632;</span> Dashboard
             </a>
+            {% endif %}
+            {% if usuario and usuario.tiene_permiso('upload') %}
             <a href="/upload" class="nav-link {{ 'active' if request.url.path == '/upload' else '' }}">
                 <span class="nav-icon">&#8679;</span> Subir PDF
             </a>
+            {% endif %}
+            {% if not usuario or usuario.tiene_permiso('movimientos') %}
             <a href="/movimientos" class="nav-link {{ 'active' if '/movimientos' in request.url.path else '' }}">
                 <span class="nav-icon">&#9776;</span> Movimientos
             </a>
+            {% endif %}
+            {% if not usuario or usuario.tiene_permiso('reporte') %}
             <a href="/reporte" class="nav-link {{ 'active' if '/reporte' in request.url.path else '' }}">
                 <span class="nav-icon">&#9733;</span> Reporte Ley 25.413
+            </a>
+            {% endif %}
+            {% if usuario and usuario.tiene_permiso('monotributo') %}
+            <a href="/monotributo" class="nav-link {{ 'active' if '/monotributo' in request.url.path else '' }}">
+                <span class="nav-icon">&#9830;</span> Monotributo
+            </a>
+            {% endif %}
+            {% if usuario and usuario.tiene_permiso('clientes') %}
+            <a href="/clientes" class="nav-link {{ 'active' if '/clientes' in request.url.path else '' }}">
+                <span class="nav-icon">&#9782;</span> Clientes
+            </a>
+            {% endif %}
+            {% if usuario and usuario.tiene_permiso('usuarios') %}
+            <a href="/usuarios" class="nav-link {{ 'active' if '/usuarios' in request.url.path else '' }}">
+                <span class="nav-icon">&#9881;</span> Usuarios
+            </a>
+            {% endif %}
+            <a href="/logout" class="nav-link" style="margin-left:auto; color:rgba(255,255,255,0.6); font-size:0.85rem;">
+                {% if usuario %}{{ usuario.nombre }} &mdash; {% endif %}Cerrar sesion
             </a>
         </div>
     </nav>

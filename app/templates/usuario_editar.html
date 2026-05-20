@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}Editar {{ usuario_edit.username }} — Lector de Resumenes{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Editar usuario: {{ usuario_edit.username }}</h1>
+    <p class="subtitle">Modificar datos, permisos o contrasena.</p>
+</div>
+
+{% if exito %}
+<div class="alert alert-success">{{ exito }}</div>
+{% endif %}
+
+<div class="card">
+    <form method="post" action="/usuarios/{{ usuario_edit.id }}/editar">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1rem;">
+            <div class="filter-group">
+                <label for="nombre">Nombre completo</label>
+                <input type="text" id="nombre" name="nombre" value="{{ usuario_edit.nombre }}" required style="width:100%; height:38px;">
+            </div>
+            <div class="filter-group">
+                <label for="password">Nueva contrasena <span style="font-weight:normal; color:var(--text-light);">(dejar vacio para no cambiar)</span></label>
+                <input type="password" id="password" name="password" placeholder="Sin cambios" style="width:100%; height:38px;">
+            </div>
+        </div>
+
+        <div style="margin-bottom:1rem;">
+            <label style="font-size:0.85rem; font-weight:600; display:block; margin-bottom:0.5rem;">Permisos</label>
+            <div style="display:flex; gap:1.5rem; flex-wrap:wrap;">
+                {% for permiso in todos_los_permisos %}
+                <label style="display:flex; align-items:center; gap:0.4rem; font-size:0.9rem; cursor:pointer;">
+                    <input type="checkbox" name="permisos" value="{{ permiso }}"
+                        {{ 'checked' if permiso in usuario_edit.lista_permisos() else '' }}>
+                    {{ etiquetas.get(permiso, permiso) }}
+                </label>
+                {% endfor %}
+            </div>
+        </div>
+
+        <div style="margin-bottom:1.5rem;">
+            <label style="display:flex; align-items:center; gap:0.5rem; font-size:0.9rem; cursor:pointer;">
+                <input type="checkbox" name="activo" {{ 'checked' if usuario_edit.activo else '' }}>
+                <strong>Usuario activo</strong>
+                <span style="color:var(--text-light);">(si se desactiva no podra iniciar sesion)</span>
+            </label>
+        </div>
+
+        <div style="display:flex; gap:0.75rem;">
+            <button type="submit" class="btn btn-primary">Guardar cambios</button>
+            <a href="/usuarios" class="btn">Volver</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
