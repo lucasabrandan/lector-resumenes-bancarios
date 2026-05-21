@@ -53,8 +53,16 @@ _REGLAS_RAW: list[tuple[str, TipoMovimiento]] = [
     (r"Impuesto\s+Débitos\s+y\s+Créditos/CR", TipoMovimiento.IMPUESTO_LEY_25413_SOBRE_CREDITOS),
     (r"IMPUESTO\s+A\s+LOS\s+SELLOS", TipoMovimiento.IMPUESTO_SELLOS),
 
+    # ---- RETENCIONES (antes que percepciones, más específicas) ----
+    (r"Retenci[oó]n\s+(?:de\s+)?I\.?V\.?A\.?", TipoMovimiento.RETENCION_IVA),
+    (r"Retenci[oó]n\s+(?:de\s+)?(?:Ing\.?\s*Brutos|I\.?I\.?B\.?B\.?|IIBB)", TipoMovimiento.RETENCION_IIBB),
+    (r"Retenci[oó]n\s+(?:de\s+)?Ganancias", TipoMovimiento.RETENCION_GANANCIAS),
+    (r"Retenci[oó]n\s+(?:de\s+)?(?:SUSS|Seg\.?\s*Social)", TipoMovimiento.RETENCION_SUSS),
+
     # ---- PERCEPCIONES (antes que IVA simple) ----
-    (r"Percepción\s+I\.?V\.?A\.?", TipoMovimiento.PERCEPCION_IVA),
+    (r"Percepci[oó]n\s+(?:de\s+)?(?:Ing\.?\s*Brutos|I\.?I\.?B\.?B\.?|IIBB)", TipoMovimiento.PERCEPCION_IIBB),
+    (r"Percepci[oó]n\s+(?:de\s+)?Ganancias", TipoMovimiento.PERCEPCION_GANANCIAS),
+    (r"Percepci[oó]n\s+I\.?V\.?A\.?", TipoMovimiento.PERCEPCION_IVA),
     (r"I\.V\.A\.\s+Percep", TipoMovimiento.PERCEPCION_IVA),
 
     # ---- IVA simple ----

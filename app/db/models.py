@@ -16,7 +16,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base
 
 
-TODOS_LOS_PERMISOS = ["dashboard", "upload", "movimientos", "reporte", "monotributo", "clientes", "usuarios"]
+TODOS_LOS_PERMISOS = ["dashboard", "upload", "movimientos", "reporte", "percepciones", "monotributo", "clientes", "usuarios"]
 
 
 class UsuarioClienteDB(Base):
@@ -116,4 +116,36 @@ class MovimientoDB(Base):
         Index("ix_movimientos_cuenta_fecha", "cuenta", "fecha"),
         Index("ix_movimientos_tipo", "tipo"),
         Index("ix_movimientos_cliente", "cliente_id"),
+    )
+
+
+class ComprobanteDB(Base):
+    """Comprobante emitido importado desde ARCA (Mis Comprobantes)."""
+
+    __tablename__ = "comprobantes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+
+    cliente_id: Mapped[int] = mapped_column(Integer, ForeignKey("clientes.id", ondelete="CASCADE"), nullable=False)
+    cliente: Mapped["ClienteDB"] = relationship("ClienteDB")
+
+    fecha: Mapped[date] = mapped_column(Date, nullable=False)
+    tipo_comprobante: Mapped[str] = mapped_column(String(50), nullable=False)  # Factura C, Nota de Credito C, etc.
+    punto_venta: Mapped[int] = mapped_column(Integer, nullable=False)
+    numero_desde: Mapped[int] = mapped_column(Integer, nullable=False)
+    numero_hasta: Mapped[int] = mapped_column(Integer, nullable=False)
+    cod_autorizacion: Mapped[str | None] = mapped_column(String(30))
+    tipo_doc_receptor: Mapped[str | None] = mapped_column(String(10))
+    nro_doc_receptor: Mapped[str | None] = mapped_column(String(15))
+    denominacion_receptor: Mapped[str | None] = mapped_column(String(300))
+    moneda: Mapped[str] = mapped_column(String(5), default="PES")
+    tipo_cambio: Mapped[float] = mapped_column(Numeric(14, 6), default=1.0)
+    importe_total: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
+
+    # Para saber de qué archivo vino y detectar duplicados
+    archivo_origen: Mapped[str | None] = mapped_column(String(255))
+    creado: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index("ix_comprobantes_cliente_fecha", "cliente_id", "fecha"),
     )

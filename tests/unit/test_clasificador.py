@@ -36,7 +36,21 @@ CASOS_REALES = [
     ("Impuesto Débitos y Créditos/CR", TipoMovimiento.IMPUESTO_LEY_25413_SOBRE_CREDITOS),
     ("IMPUESTO A LOS SELLOS", TipoMovimiento.IMPUESTO_SELLOS),
 
+    # RETENCIONES (antes que percepciones)
+    ("Retención de IVA", TipoMovimiento.RETENCION_IVA),
+    ("Retención I.V.A.", TipoMovimiento.RETENCION_IVA),
+    ("Retención de Ing. Brutos", TipoMovimiento.RETENCION_IIBB),
+    ("Retención IIBB", TipoMovimiento.RETENCION_IIBB),
+    ("Retención de Ganancias", TipoMovimiento.RETENCION_GANANCIAS),
+    ("Retencion Ganancias", TipoMovimiento.RETENCION_GANANCIAS),
+    ("Retención de SUSS", TipoMovimiento.RETENCION_SUSS),
+    ("Retención Seg. Social", TipoMovimiento.RETENCION_SUSS),
+
     # PERCEPCIONES (antes que IVA simple)
+    ("Percepción Ing. Brutos", TipoMovimiento.PERCEPCION_IIBB),
+    ("Percepción de IIBB", TipoMovimiento.PERCEPCION_IIBB),
+    ("Percepcion de Ing. Brutos", TipoMovimiento.PERCEPCION_IIBB),
+    ("Percepción de Ganancias", TipoMovimiento.PERCEPCION_GANANCIAS),
     ("Percepción I.V.A. RG. 3337", TipoMovimiento.PERCEPCION_IVA),
     ("I.V.A. Percep. Resp. Inscripto", TipoMovimiento.PERCEPCION_IVA),
 
@@ -126,6 +140,18 @@ class TestPrecedenciaDeReglas:
     def test_percepcion_iva_no_es_iva_simple(self):
         """'Percepción I.V.A.' debe matchear PERCEPCION_IVA, no IVA."""
         assert clasificar("Percepción I.V.A. RG. 3337") == TipoMovimiento.PERCEPCION_IVA
+
+    def test_percepcion_iibb_no_es_percepcion_iva(self):
+        """'Percepción Ing. Brutos' es PERCEPCION_IIBB, no PERCEPCION_IVA."""
+        assert clasificar("Percepción Ing. Brutos") == TipoMovimiento.PERCEPCION_IIBB
+
+    def test_retencion_iva_no_es_iva_simple(self):
+        """'Retención de IVA' es RETENCION_IVA, no IVA."""
+        assert clasificar("Retención de IVA") == TipoMovimiento.RETENCION_IVA
+
+    def test_retencion_ganancias_no_es_otro(self):
+        """'Retención de Ganancias' es RETENCION_GANANCIAS."""
+        assert clasificar("Retención de Ganancias") == TipoMovimiento.RETENCION_GANANCIAS
 
     def test_comision_riesgo_es_comision(self):
         """'Comisión Riesgo' es una COMISION, no un tipo aparte."""

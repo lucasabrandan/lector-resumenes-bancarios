@@ -5,6 +5,7 @@ Estas son las páginas que ve la contadora en el navegador.
 """
 
 import json
+import logging
 from pathlib import Path
 
 from markupsafe import Markup
@@ -48,6 +49,7 @@ from app.services.clientes import (
     ids_clientes_no_monotributo,
 )
 from app.reports.ley_25413 import generar_reporte_ley_25413, resumen_general, exportar_reporte_xlsx
+from app.reports.percepciones import generar_reporte_percepciones, resumen_totales, exportar_percepciones_xlsx
 from app.services.monotributo import generar_panel_monotributo, CATEGORIAS_MONOTRIBUTO
 from app.services.comprobantes import (
     guardar_comprobantes,
@@ -56,8 +58,10 @@ from app.services.comprobantes import (
     listar_archivos_comprobantes,
 )
 from app.parsers.arca_comprobantes import parsear_archivo
+from app.parsers.supervielle_pdf import ParserError, ErrorValidacionSaldo
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 _TEMPLATES_DIR = Path(__file__).resolve().parent.parent.parent / "templates"
 templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
@@ -161,8 +165,37 @@ async def upload_pdf(
         nombre_cliente = cliente.nombre if cliente else "?"
         ctx["exito"] = f"Se procesaron {cantidad:,} movimientos del archivo '{archivo.filename}' para el cliente '{nombre_cliente}'."
         return templates.TemplateResponse("upload.html", ctx)
+    except ErrorValidacionSaldo as e:
+        logger.error("Inconsistencia de saldo en '%s': %s", archivo.filename, e)
+        ctx["error"] = (
+            f"El archivo '{archivo.filename}' tiene una inconsistencia interna: "
+            f"un movimiento no cuadra con el saldo (pagina {e.movimiento.pagina}, "
+            f"concepto '{e.movimiento.concepto}'). "
+            f"Revisa que el PDF este completo y no tenga paginas faltantes."
+        )
+        return templates.TemplateResponse("upload.html", ctx)
+    except ValueError as e:
+        logger.warning("PDF no reconocido '%s': %s", archivo.filename, e)
+        ctx["error"] = (
+            f"No se pudo procesar '{archivo.filename}'. "
+            f"Verifica que sea un extracto de cuenta corriente del Banco Supervielle. "
+            f"Detalle: {e}"
+        )
+        return templates.TemplateResponse("upload.html", ctx)
+    except ParserError as e:
+        logger.error("Error de parser en '%s': %s", archivo.filename, e)
+        ctx["error"] = (
+            f"Error al leer el PDF '{archivo.filename}'. "
+            f"El archivo podria estar danado o tener un formato inesperado. "
+            f"Detalle: {e}"
+        )
+        return templates.TemplateResponse("upload.html", ctx)
     except Exception as e:
-        ctx["error"] = f"Error al procesar el PDF: {e}"
+        logger.exception("Error inesperado procesando '%s'", archivo.filename)
+        ctx["error"] = (
+            f"Error inesperado al procesar '{archivo.filename}'. "
+            f"Si el problema persiste, contacta al administrador."
+        )
         return templates.TemplateResponse("upload.html", ctx)
 
 
@@ -263,24 +296,58 @@ async def descargar_reporte(request: Request, db: Session = Depends(get_db)):
 
 
 # --------------------------------------------------------------------------
+# Percepciones y Retenciones
+# --------------------------------------------------------------------------
+
+@router.get("/percepciones", response_class=HTMLResponse)
+async def percepciones_page(request: Request, db: Session = Depends(get_db)):
+    cids = _get_cliente_ids(request, db)
+    cids_no_mono = ids_clientes_no_monotributo(db, cliente_ids=cids)
+    reporte = generar_reporte_percepciones(db, cliente_ids=cids_no_mono)
+    totales = resumen_totales(reporte)
+    return templates.TemplateResponse("percepciones.html", _ctx(
+        request, reporte=reporte, totales=totales))
+
+
+@router.get("/percepciones/descargar")
+async def descargar_percepciones(request: Request, db: Session = Depends(get_db)):
+    cids = _get_cliente_ids(request, db)
+    cids_no_mono = ids_clientes_no_monotributo(db, cliente_ids=cids)
+    reporte = generar_reporte_percepciones(db, cliente_ids=cids_no_mono)
+    xlsx = exportar_percepciones_xlsx(reporte)
+    return StreamingResponse(
+        xlsx,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=percepciones_retenciones.xlsx"},
+    )
+
+
+# --------------------------------------------------------------------------
 # Panel de Monotributo
 # --------------------------------------------------------------------------
 
 @router.get("/monotributo", response_class=HTMLResponse)
 async def monotributo_page(request: Request, db: Session = Depends(get_db)):
+    return templates.TemplateResponse("monotributo.html",
+        _monotributo_ctx(request, db))
+
+
+def _monotributo_ctx(request: Request, db: Session, **kwargs) -> dict:
+    """Contexto comun para renderizar la pagina de monotributo."""
     cids = _get_cliente_ids(request, db)
     panel = generar_panel_monotributo(db, cliente_ids=cids)
     usuario = getattr(request.state, "usuario", None)
     clientes_mono = listar_clientes_de_usuario(usuario, db) if usuario else []
     clientes_mono = [c for c in clientes_mono if c.categoria == "Monotributo"]
     archivos_comp = listar_archivos_comprobantes(db)
-    return templates.TemplateResponse("monotributo.html", _ctx(
+    return _ctx(
         request,
         panel=panel,
         categorias_monotributo=CATEGORIAS_MONOTRIBUTO,
         clientes_mono=clientes_mono,
         archivos_comprobantes=archivos_comp,
-    ))
+        **kwargs,
+    )
 
 
 @router.post("/monotributo/upload")
@@ -292,33 +359,48 @@ async def upload_comprobantes(request: Request, db: Session = Depends(get_db)):
     cliente_id = int(cliente_id_str) if cliente_id_str else None
 
     if not archivo or not getattr(archivo, "filename", None):
-        return RedirectResponse("/monotributo?error=Selecciona+un+archivo", status_code=303)
+        return templates.TemplateResponse("monotributo.html",
+            _monotributo_ctx(request, db, error="Selecciona un archivo."))
 
     ext = archivo.filename.lower().rsplit(".", 1)[-1] if "." in archivo.filename else ""
     if ext not in ("csv", "xlsx", "xls"):
-        return RedirectResponse("/monotributo?error=Solo+CSV+o+Excel", status_code=303)
+        return templates.TemplateResponse("monotributo.html",
+            _monotributo_ctx(request, db, error="Solo se aceptan archivos CSV o Excel (.xlsx/.xls)."))
 
     if not cliente_id:
-        return RedirectResponse("/monotributo?error=Selecciona+un+cliente", status_code=303)
+        return templates.TemplateResponse("monotributo.html",
+            _monotributo_ctx(request, db, error="Selecciona un cliente."))
 
     # Detectar duplicado
     existentes = archivo_comprobantes_ya_cargado(archivo.filename, cliente_id, db)
     if existentes > 0:
-        return RedirectResponse(
-            f"/monotributo?error=Archivo+ya+cargado+({existentes}+comprobantes)", status_code=303
-        )
+        return templates.TemplateResponse("monotributo.html",
+            _monotributo_ctx(request, db,
+                error=f"El archivo '{archivo.filename}' ya fue cargado ({existentes} comprobantes). Eliminalo primero si queres reprocesarlo."))
 
     contenido = await archivo.read()
     try:
         comprobantes = parsear_archivo(archivo.filename, contenido)
+    except ValueError as e:
+        logger.warning("Comprobantes no reconocidos '%s': %s", archivo.filename, e)
+        return templates.TemplateResponse("monotributo.html",
+            _monotributo_ctx(request, db,
+                error=f"No se pudo leer '{archivo.filename}'. Verifica que sea un archivo exportado desde ARCA (Mis Comprobantes Emitidos). Detalle: {e}"))
     except Exception as e:
-        return RedirectResponse(f"/monotributo?error=Error+al+parsear:+{e}", status_code=303)
+        logger.exception("Error inesperado parseando comprobantes '%s'", archivo.filename)
+        return templates.TemplateResponse("monotributo.html",
+            _monotributo_ctx(request, db,
+                error=f"Error inesperado al procesar '{archivo.filename}'. Si el problema persiste, contacta al administrador."))
 
     if not comprobantes:
-        return RedirectResponse("/monotributo?error=No+se+encontraron+comprobantes", status_code=303)
+        return templates.TemplateResponse("monotributo.html",
+            _monotributo_ctx(request, db,
+                error=f"No se encontraron comprobantes en '{archivo.filename}'. Verifica que el archivo tenga datos y que las columnas incluyan Fecha, Tipo e Imp. Total."))
 
     cantidad = guardar_comprobantes(comprobantes, cliente_id, archivo.filename, db)
-    return RedirectResponse(f"/monotributo?exito=Se+cargaron+{cantidad}+comprobantes", status_code=303)
+    return templates.TemplateResponse("monotributo.html",
+        _monotributo_ctx(request, db,
+            exito=f"Se cargaron {cantidad} comprobantes desde '{archivo.filename}'."))
 
 
 @router.post("/monotributo/eliminar-archivo")
@@ -330,9 +412,9 @@ async def eliminar_archivo_comprobantes(request: Request, db: Session = Depends(
 
     if archivo and cliente_id:
         eliminados = eliminar_comprobantes_por_archivo(archivo, cliente_id, db)
-        return RedirectResponse(
-            f"/monotributo?exito=Se+eliminaron+{eliminados}+comprobantes", status_code=303
-        )
+        return templates.TemplateResponse("monotributo.html",
+            _monotributo_ctx(request, db,
+                exito=f"Se eliminaron {eliminados} comprobantes del archivo '{archivo}'."))
     return RedirectResponse("/monotributo", status_code=303)
 
 
@@ -345,6 +427,7 @@ ETIQUETAS_PERMISOS = {
     "upload": "Subir PDF",
     "movimientos": "Movimientos",
     "reporte": "Reportes",
+    "percepciones": "Percepciones/Retenciones",
     "monotributo": "Panel Monotributo",
     "clientes": "Gestionar clientes",
     "usuarios": "Gestionar usuarios",
@@ -355,6 +438,7 @@ DESCRIPCIONES_PERMISOS = {
     "upload": "subir extractos bancarios",
     "movimientos": "ver lista de movimientos",
     "reporte": "ver y descargar reporte Ley 25.413",
+    "percepciones": "ver reporte de percepciones y retenciones sufridas",
     "monotributo": "ver panel de monotributo y cargar comprobantes",
     "clientes": "crear, editar y eliminar clientes",
     "usuarios": "administrar usuarios y permisos",

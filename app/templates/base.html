@@ -32,6 +32,11 @@
                 <span class="nav-icon">&#9733;</span> Reporte Ley 25.413
             </a>
             {% endif %}
+            {% if usuario and usuario.tiene_permiso('percepciones') %}
+            <a href="/percepciones" class="nav-link {{ 'active' if '/percepciones' in request.url.path else '' }}">
+                <span class="nav-icon">&#128203;</span> Perc/Ret
+            </a>
+            {% endif %}
             {% if usuario and usuario.tiene_permiso('monotributo') %}
             <a href="/monotributo" class="nav-link {{ 'active' if '/monotributo' in request.url.path else '' }}">
                 <span class="nav-icon">&#9830;</span> Monotributo

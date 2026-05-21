@@ -4,12 +4,26 @@ Entry point de la aplicación FastAPI.
 Registra las rutas HTML (Jinja + HTMX) y crea las tablas al arrancar.
 """
 
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from dotenv import load_dotenv
 
 load_dotenv()
+
+# Logging: archivo + consola
+_LOG_DIR = Path(__file__).resolve().parent.parent.parent / "logs"
+_LOG_DIR.mkdir(parents=True, exist_ok=True)
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    handlers=[
+        logging.FileHandler(_LOG_DIR / "app.log", encoding="utf-8"),
+        logging.StreamHandler(),
+    ],
+)
 
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, RedirectResponse

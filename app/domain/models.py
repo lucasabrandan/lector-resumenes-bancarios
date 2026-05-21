@@ -61,6 +61,12 @@ class TipoMovimiento(str, Enum):
     COMISION = "COMISION"
     IVA = "IVA"
     PERCEPCION_IVA = "PERCEPCION_IVA"
+    PERCEPCION_IIBB = "PERCEPCION_IIBB"
+    PERCEPCION_GANANCIAS = "PERCEPCION_GANANCIAS"
+    RETENCION_IVA = "RETENCION_IVA"
+    RETENCION_IIBB = "RETENCION_IIBB"
+    RETENCION_GANANCIAS = "RETENCION_GANANCIAS"
+    RETENCION_SUSS = "RETENCION_SUSS"
     # El Impuesto Ley 25.413 (al cheque) se separa en dos categorías porque
     # el banco lo reporta diferenciado: cuánto cobró sobre los débitos del
     # mes y cuánto sobre los créditos. Es lo que va a ARCA por separado.

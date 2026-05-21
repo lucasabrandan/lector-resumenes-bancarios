@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}Percepciones y Retenciones — Lector de Resumenes{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Percepciones y Retenciones</h1>
+    <p class="subtitle">Detalle mensual para carga en SIRE y DDJJ de IVA</p>
+</div>
+
+{% if not reporte %}
+<div class="card">
+    <div class="empty-state">
+        <div class="empty-icon">&#128203;</div>
+        <h2>Sin datos</h2>
+        <p>No se encontraron percepciones ni retenciones en los movimientos cargados.</p>
+        <p style="color:var(--text-light); font-size:0.85rem;">
+            Esto puede significar que los extractos cargados no incluyen estos conceptos,
+            o que el banco los describe de una forma no reconocida por el sistema.
+        </p>
+    </div>
+</div>
+{% else %}
+
+<!-- Resumen rapido -->
+<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:1rem; margin-bottom:1.5rem;">
+    <div class="card stat-card">
+        <div class="stat-icon stat-icon-blue">&#128203;</div>
+        <div class="stat-body">
+            <div class="stat-number">{{ totales.cantidad }}</div>
+            <div class="stat-label">Movimientos</div>
+        </div>
+    </div>
+    <div class="card stat-card">
+        <div class="stat-icon stat-icon-red">&#8595;</div>
+        <div class="stat-body">
+            <div class="stat-number">${{ "{:,.2f}".format(totales.total_percepciones) }}</div>
+            <div class="stat-label">Percepciones</div>
+        </div>
+    </div>
+    <div class="card stat-card">
+        <div class="stat-icon stat-icon-purple">&#8595;</div>
+        <div class="stat-body">
+            <div class="stat-number">${{ "{:,.2f}".format(totales.total_retenciones) }}</div>
+            <div class="stat-label">Retenciones</div>
+        </div>
+    </div>
+    <div class="card stat-card">
+        <div class="stat-icon stat-icon-green">&#9733;</div>
+        <div class="stat-body">
+            <div class="stat-number">${{ "{:,.2f}".format(totales.total_general) }}</div>
+            <div class="stat-label">Total (credito fiscal)</div>
+        </div>
+    </div>
+</div>
+
+<!-- Boton descargar -->
+<div style="margin-bottom:1.5rem; text-align:right;">
+    <a href="/percepciones/descargar" class="btn btn-success"><span>&#8681;</span> Descargar XLSX</a>
+</div>
+
+<!-- Tabla detalle por mes -->
+{% for mes in reporte %}
+<div class="card" style="margin-bottom:1rem;">
+    <div class="card-header">
+        <h2>{{ mes.periodo }}</h2>
+        <span style="font-size:0.85rem; color:var(--text-light);">
+            Total: ${{ "{:,.2f}".format(mes.total_general) }}
+        </span>
+    </div>
+    <div class="table-responsive">
+        <table>
+            <thead>
+                <tr>
+                    <th>Tipo</th>
+                    <th class="num">Cantidad</th>
+                    <th class="num">Importe</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for linea in mes.lineas %}
+                <tr>
+                    <td>
+                        {% if linea.es_retencion %}
+                        <span class="badge" style="background:#f3e8ff; color:#7c3aed;">Ret.</span>
+                        {% else %}
+                        <span class="badge" style="background:#dbeafe; color:#2563eb;">Perc.</span>
+                        {% endif %}
+                        {{ linea.etiqueta }}
+                    </td>
+                    <td class="num">{{ linea.cantidad }}</td>
+                    <td class="num">${{ "{:,.2f}".format(linea.total) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr class="total-row">
+                    <td><strong>Subtotal</strong></td>
+                    <td class="num"><strong>{{ mes.lineas | sum(attribute='cantidad') }}</strong></td>
+                    <td class="num"><strong>${{ "{:,.2f}".format(mes.total_general) }}</strong></td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+{% endfor %}
+
+<!-- Leyenda -->
+<div class="card" style="font-size:0.85rem; color:var(--text-light);">
+    <strong>Uso de este reporte:</strong>
+    <ul style="margin:0.5rem 0 0 1rem; padding:0;">
+        <li><strong>Percepciones de IVA:</strong> se cargan en el SIRE como credito fiscal computable en la DDJJ de IVA.</li>
+        <li><strong>Percepciones de IIBB:</strong> se toman como pago a cuenta en la DDJJ de Ingresos Brutos.</li>
+        <li><strong>Retenciones:</strong> se cargan en el SIRE y se computan como pago a cuenta del impuesto correspondiente.</li>
+    </ul>
+</div>
+{% endif %}
+{% endblock %}

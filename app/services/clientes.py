@@ -91,3 +91,13 @@ def ids_clientes_de_usuario(usuario: UsuarioDB, db: Session) -> list[int] | None
         .all()
     )
     return [r[0] for r in rows]
+
+
+def ids_clientes_no_monotributo(db: Session, cliente_ids: list[int] | None = None) -> list[int] | None:
+    """Filtra cliente_ids excluyendo monotributistas. Para reportes Ley 25.413."""
+    query = db.query(ClienteDB.id).filter(ClienteDB.categoria != "Monotributo")
+    if cliente_ids is not None:
+        query = query.filter(ClienteDB.id.in_(cliente_ids))
+        return [r[0] for r in query.all()]
+    # Admin (None) — devolver solo los no-monotributistas
+    return [r[0] for r in query.all()]

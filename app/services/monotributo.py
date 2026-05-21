@@ -11,10 +11,10 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import func
+from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
-from app.db.models import ClienteDB, MovimientoDB
+from app.db.models import ClienteDB, ComprobanteDB, MovimientoDB
 
 
 # Topes ANUALES de facturación bruta por categoría (vigencia julio 2025).
@@ -42,7 +42,9 @@ def tope_anual(categoria: str, actividad: str = "servicios") -> Decimal | None:
     cat = TOPES_MONOTRIBUTO.get(categoria.upper())
     if not cat:
         return None
-    return cat.get(actividad)
+    # "ambas" usa el tope de comercio (siempre >= servicios)
+    clave = "comercio" if actividad == "ambas" else actividad
+    return cat.get(clave)
 
 
 def tope_semestral(categoria: str, actividad: str = "servicios") -> Decimal | None:
@@ -74,18 +76,19 @@ class ResumenMonotributo:
     categoria: str
     actividad: str
     tope_semestral: Decimal
-    acumulado_creditos: Decimal
+    acumulado_facturacion: Decimal
     semestre_label: str
+    fuente: str  # "arca" o "banco"
 
     @property
     def porcentaje_usado(self) -> float:
         if self.tope_semestral == 0:
             return 0.0
-        return float((self.acumulado_creditos / self.tope_semestral) * 100)
+        return float((self.acumulado_facturacion / self.tope_semestral) * 100)
 
     @property
     def disponible(self) -> Decimal:
-        return self.tope_semestral - self.acumulado_creditos
+        return self.tope_semestral - self.acumulado_facturacion
 
     @property
     def estado(self) -> str:
@@ -130,9 +133,34 @@ def generar_panel_monotributo(
     if not clientes:
         return []
 
-    # Obtener acumulado de créditos por cliente en el semestre
     ids = [c.id for c in clientes]
-    acumulados = dict(
+
+    # Facturación desde comprobantes ARCA (fuente principal).
+    # Facturas suman, Notas de Crédito restan.
+    acum_arca = dict(
+        db.query(
+            ComprobanteDB.cliente_id,
+            func.coalesce(
+                func.sum(
+                    case(
+                        (ComprobanteDB.tipo_comprobante.ilike("%nota de cr%"), -ComprobanteDB.importe_total),
+                        else_=ComprobanteDB.importe_total,
+                    )
+                ),
+                0,
+            ).label("total"),
+        )
+        .filter(
+            ComprobanteDB.cliente_id.in_(ids),
+            ComprobanteDB.fecha >= inicio,
+            ComprobanteDB.fecha <= fin,
+        )
+        .group_by(ComprobanteDB.cliente_id)
+        .all()
+    )
+
+    # Fallback: créditos bancarios (para clientes sin comprobantes cargados)
+    acum_banco = dict(
         db.query(
             MovimientoDB.cliente_id,
             func.coalesce(func.sum(MovimientoDB.importe), 0).label("total"),
@@ -154,7 +182,13 @@ def generar_panel_monotributo(
         if tope is None:
             continue
 
-        acum = Decimal(str(acumulados.get(c.id, 0))).quantize(Decimal("0.01"))
+        # Priorizar comprobantes ARCA; si no hay, usar créditos bancarios
+        if c.id in acum_arca:
+            acum = Decimal(str(acum_arca[c.id])).quantize(Decimal("0.01"))
+            fuente = "arca"
+        else:
+            acum = Decimal(str(acum_banco.get(c.id, 0))).quantize(Decimal("0.01"))
+            fuente = "banco"
 
         resultado.append(ResumenMonotributo(
             cliente_id=c.id,
@@ -163,8 +197,9 @@ def generar_panel_monotributo(
             categoria=c.categoria_monotributo,
             actividad=actividad,
             tope_semestral=tope,
-            acumulado_creditos=acum,
+            acumulado_facturacion=acum,
             semestre_label=semestre_label,
+            fuente=fuente,
         ))
 
     # Ordenar por % usado descendente (los más urgentes primero)

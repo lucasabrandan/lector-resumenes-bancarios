@@ -11,6 +11,15 @@
     {% endif %}
 </div>
 
+{% if exito %}
+<div class="alert alert-success">{{ exito }}</div>
+{% endif %}
+{% if error %}
+<div class="alert alert-error" style="background:var(--error-light); color:var(--error); border:1px solid var(--error); padding:0.75rem 1rem; border-radius:8px; margin-bottom:1rem;">
+    {{ error }}
+</div>
+{% endif %}
+
 {% if not panel %}
 <div class="card">
     <p style="color:var(--text-light); text-align:center; padding:2rem 0;">
@@ -60,10 +69,11 @@
                     <th style="text-align:center;">Cat.</th>
                     <th style="text-align:center;">Actividad</th>
                     <th class="num">Tope semestral</th>
-                    <th class="num">Acumulado</th>
+                    <th class="num">Facturado</th>
                     <th class="num">Disponible</th>
                     <th style="width:180px;">% Usado</th>
                     <th style="text-align:center;">Estado</th>
+                    <th style="text-align:center;">Fuente</th>
                 </tr>
             </thead>
             <tbody>
@@ -74,7 +84,7 @@
                     <td style="text-align:center;"><span class="badge">{{ r.categoria }}</span></td>
                     <td style="text-align:center; font-size:0.85rem;">{{ r.actividad | capitalize }}</td>
                     <td class="num">${{ "{:,.2f}".format(r.tope_semestral) }}</td>
-                    <td class="num">${{ "{:,.2f}".format(r.acumulado_creditos) }}</td>
+                    <td class="num">${{ "{:,.2f}".format(r.acumulado_facturacion) }}</td>
                     <td class="num" style="color:{% if r.disponible < 0 %}var(--error){% else %}inherit{% endif %};">
                         ${{ "{:,.2f}".format(r.disponible) }}
                     </td>
@@ -103,6 +113,13 @@
                         <span class="badge" style="background:var(--success-light); color:var(--success);">OK</span>
                         {% endif %}
                     </td>
+                    <td style="text-align:center;">
+                        {% if r.fuente == 'arca' %}
+                        <span class="badge" style="background:#d4edda; color:#155724; font-size:0.75rem;">ARCA</span>
+                        {% else %}
+                        <span class="badge" style="background:#fff3cd; color:#856404; font-size:0.75rem;">Banco</span>
+                        {% endif %}
+                    </td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -114,13 +131,84 @@
 <div class="card" style="font-size:0.85rem; color:var(--text-light);">
     <strong>Leyenda:</strong>
     Los topes corresponden al semestre vigente (anual / 2). La recategorizacion se realiza en enero y julio.
-    El acumulado se calcula sumando los creditos (ingresos) bancarios del semestre actual.
+    <br>
+    <strong>Fuente ARCA:</strong> facturacion real importada desde "Mis Comprobantes Emitidos" de ARCA. Las Notas de Credito se descuentan automaticamente.
+    <br>
+    <strong>Fuente Banco:</strong> estimacion basada en creditos bancarios (se usa cuando no hay comprobantes ARCA cargados).
     <br><br>
     <strong>Estados:</strong>
     <span style="color:var(--success);">OK</span> (&lt;60%) —
     <span style="color:#f39c12;">ATENCION</span> (&ge;60%) —
     <span style="color:#e67e22;">ALERTA</span> (&ge;80%) —
     <span style="color:var(--error);">CRITICO</span> (&ge;95%)
+</div>
+{% endif %}
+
+<!-- Cargar comprobantes ARCA -->
+{% if clientes_mono %}
+<div class="card" style="margin-top:1.5rem;">
+    <h2>Cargar comprobantes ARCA</h2>
+    <p style="font-size:0.85rem; color:var(--text-light); margin-bottom:1rem;">
+        Subi el archivo de "Mis Comprobantes Emitidos" descargado desde ARCA (CSV o Excel).
+    </p>
+    <form method="post" action="/monotributo/upload" enctype="multipart/form-data">
+        <div style="display:grid; grid-template-columns:1fr 1fr auto; gap:1rem; align-items:end;">
+            <div class="filter-group">
+                <label for="cliente_id">Cliente</label>
+                <select id="cliente_id" name="cliente_id" required style="width:100%; height:38px;">
+                    <option value="">-- Seleccionar --</option>
+                    {% for c in clientes_mono %}
+                    <option value="{{ c.id }}">{{ c.nombre }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="filter-group">
+                <label for="archivo_arca">Archivo (CSV / Excel)</label>
+                <input type="file" id="archivo_arca" name="archivo" accept=".csv,.xlsx,.xls" required style="height:38px;">
+            </div>
+            <button type="submit" class="btn btn-primary" style="height:38px;">Cargar</button>
+        </div>
+    </form>
+</div>
+{% endif %}
+
+<!-- Archivos cargados -->
+{% if archivos_comprobantes %}
+<div class="card" style="margin-top:1rem;">
+    <h2>Archivos de comprobantes cargados</h2>
+    <div class="table-responsive">
+        <table>
+            <thead>
+                <tr>
+                    <th>Archivo</th>
+                    <th class="num">Comprobantes</th>
+                    <th>Desde</th>
+                    <th>Hasta</th>
+                    <th class="num">Total</th>
+                    <th style="text-align:center;">Acciones</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for a in archivos_comprobantes %}
+                <tr>
+                    <td>{{ a.archivo }}</td>
+                    <td class="num">{{ a.cantidad }}</td>
+                    <td>{{ a.fecha_desde.strftime('%d/%m/%Y') if a.fecha_desde else '-' }}</td>
+                    <td>{{ a.fecha_hasta.strftime('%d/%m/%Y') if a.fecha_hasta else '-' }}</td>
+                    <td class="num">${{ "{:,.2f}".format(a.total) }}</td>
+                    <td style="text-align:center;">
+                        <form method="post" action="/monotributo/eliminar-archivo" style="display:inline;"
+                              onsubmit="return confirm('Eliminar {{ a.cantidad }} comprobantes de {{ a.archivo }}?');">
+                            <input type="hidden" name="archivo" value="{{ a.archivo }}">
+                            <input type="hidden" name="cliente_id" value="{{ a.cliente_id }}">
+                            <button type="submit" class="btn btn-sm" style="color:var(--error); font-size:0.8rem;">Eliminar</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </div>
 {% endif %}
 {% endblock %}
