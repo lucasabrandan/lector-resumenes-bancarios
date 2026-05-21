@@ -12,7 +12,7 @@
 {% if total_movimientos == 0 %}
 <div class="card">
     <div class="empty-state">
-        <div class="empty-icon">&#128196;</div>
+        <div class="empty-icon"><i data-lucide="file-text"></i></div>
         <h2>Sin datos cargados</h2>
         <p>No hay movimientos todavia. <a href="/upload">Subi un extracto PDF</a> para empezar.</p>
     </div>
@@ -30,10 +30,10 @@
     </div>
     <div class="dash-actions">
         {% if usuario and usuario.tiene_permiso('upload') %}
-        <a href="/upload" class="btn btn-primary"><span>&#8679;</span> Subir PDF</a>
+        <a href="/upload" class="btn btn-primary"><i data-lucide="upload"></i> Subir PDF</a>
         {% endif %}
         {% if usuario and usuario.tiene_permiso('reporte') %}
-        <a href="/reporte/descargar" class="btn btn-success"><span>&#8681;</span> Descargar XLSX</a>
+        <a href="/reporte/descargar" class="btn btn-success"><i data-lucide="download"></i> Descargar XLSX</a>
         {% endif %}
     </div>
 </div>
@@ -41,21 +41,21 @@
 {# --- Stat cards --- #}
 <div class="grid grid-4">
     <div class="card stat-card">
-        <div class="stat-icon stat-icon-blue">&#128200;</div>
+        <div class="stat-icon stat-icon-blue"><i data-lucide="bar-chart-3"></i></div>
         <div class="stat-body">
             <div class="stat-number">{{ "{:,}".format(resumen.total_movimientos) }}</div>
             <div class="stat-label">Movimientos</div>
         </div>
     </div>
     <div class="card stat-card stat-debito">
-        <div class="stat-icon stat-icon-red">&#8595;</div>
+        <div class="stat-icon stat-icon-red"><i data-lucide="arrow-down"></i></div>
         <div class="stat-body">
             <div class="stat-number">${{ "{:,.0f}".format(resumen.total_debitos) }}</div>
             <div class="stat-label">Debitos ({{ "{:,}".format(resumen.cant_debitos) }})</div>
         </div>
     </div>
     <div class="card stat-card stat-credito">
-        <div class="stat-icon stat-icon-green">&#8593;</div>
+        <div class="stat-icon stat-icon-green"><i data-lucide="arrow-up"></i></div>
         <div class="stat-body">
             <div class="stat-number">${{ "{:,.0f}".format(resumen.total_creditos) }}</div>
             <div class="stat-label">Creditos ({{ "{:,}".format(resumen.cant_creditos) }})</div>
@@ -63,7 +63,7 @@
     </div>
     {% if usuario and usuario.tiene_permiso('reporte') %}
     <div class="card stat-card">
-        <div class="stat-icon stat-icon-purple">&#9733;</div>
+        <div class="stat-icon stat-icon-purple"><i data-lucide="star"></i></div>
         <div class="stat-body">
             {% set total_imp = [] %}
             {% for r in reporte_ley %}{% if total_imp.append(r.total_neto) %}{% endif %}{% endfor %}
@@ -368,6 +368,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Initial render
     updateDonut(distGlobal, 'Importes por tipo (todos los meses)');
+
+    // Re-init Lucide icons for this page
+    if (typeof lucide !== 'undefined') lucide.createIcons();
 });
 </script>
 {% endif %}

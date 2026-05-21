@@ -33,7 +33,7 @@
         </div>
 
         <div class="upload-area" id="uploadArea">
-            <div class="upload-icon">&#128196;</div>
+            <div class="upload-icon"><i data-lucide="file-up" style="width:40px;height:40px;stroke-width:1.5;color:var(--text-muted);"></i></div>
             <div class="upload-text">
                 <strong>Hace clic aca</strong> o arrastra un archivo PDF
             </div>
@@ -138,6 +138,8 @@ document.addEventListener('DOMContentLoaded', function() {
         btn.classList.add('loading');
         btn.disabled = true;
     });
+
+    if (typeof lucide !== 'undefined') lucide.createIcons();
 });
 </script>
 {% endblock %}

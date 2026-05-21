@@ -4,72 +4,201 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Lector de Resumenes{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;550;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/static/style.css">
     <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
     {% block head %}{% endblock %}
 </head>
 <body>
-    <nav class="navbar">
-        <div class="nav-brand">Lector de Resumenes</div>
-        <div class="nav-links" style="display:flex; align-items:center; gap:0; flex:1;">
-            {% if usuario and usuario.tiene_permiso('dashboard') %}
-            <a href="/" class="nav-link {{ 'active' if request.url.path == '/' else '' }}">
-                <span class="nav-icon">&#9632;</span> Dashboard
-            </a>
-            {% endif %}
-            {% if usuario and usuario.tiene_permiso('upload') %}
-            <a href="/upload" class="nav-link {{ 'active' if request.url.path == '/upload' else '' }}">
-                <span class="nav-icon">&#8679;</span> Subir PDF
-            </a>
-            {% endif %}
-            {% if usuario and usuario.tiene_permiso('movimientos') %}
-            <a href="/movimientos" class="nav-link {{ 'active' if '/movimientos' in request.url.path else '' }}">
-                <span class="nav-icon">&#9776;</span> Movimientos
-            </a>
-            {% endif %}
-            {% if usuario and usuario.tiene_permiso('reporte') %}
-            <a href="/reporte" class="nav-link {{ 'active' if '/reporte' in request.url.path else '' }}">
-                <span class="nav-icon">&#9733;</span> Reporte Ley 25.413
-            </a>
-            {% endif %}
-            {% if usuario and usuario.tiene_permiso('percepciones') %}
-            <a href="/percepciones" class="nav-link {{ 'active' if '/percepciones' in request.url.path else '' }}">
-                <span class="nav-icon">&#128203;</span> Perc/Ret
-            </a>
-            {% endif %}
-            {% if usuario and usuario.tiene_permiso('sircreb') %}
-            <a href="/sircreb" class="nav-link {{ 'active' if '/sircreb' in request.url.path else '' }}">
-                <span class="nav-icon">&#127970;</span> SIRCREB
-            </a>
-            {% endif %}
-            {% if usuario and usuario.tiene_permiso('monotributo') %}
-            <a href="/monotributo" class="nav-link {{ 'active' if '/monotributo' in request.url.path else '' }}">
-                <span class="nav-icon">&#9830;</span> Monotributo
-            </a>
-            {% endif %}
-            {% if usuario and usuario.tiene_permiso('clientes') %}
-            <a href="/clientes" class="nav-link {{ 'active' if '/clientes' in request.url.path else '' }}">
-                <span class="nav-icon">&#9782;</span> Clientes
-            </a>
-            {% endif %}
-            {% if usuario and usuario.tiene_permiso('usuarios') %}
-            <a href="/usuarios" class="nav-link {{ 'active' if '/usuarios' in request.url.path else '' }}">
-                <span class="nav-icon">&#9881;</span> Usuarios
-            </a>
-            {% endif %}
-            <a href="/logout" class="nav-link" style="margin-left:auto; color:rgba(255,255,255,0.6); font-size:0.85rem;">
-                {% if usuario %}{{ usuario.nombre }} &mdash; {% endif %}Cerrar sesion
-            </a>
+    <div class="app-layout">
+        <!-- ===== SIDEBAR (desktop) ===== -->
+        <aside class="sidebar">
+            <div class="sidebar-brand">
+                <div class="sidebar-brand-title">
+                    <i data-lucide="book-open-text"></i>
+                    Lector de Resumenes
+                </div>
+                <div class="sidebar-brand-sub">Estudio Contable</div>
+            </div>
+
+            <nav class="sidebar-nav">
+                <div class="sidebar-section">Principal</div>
+                {% if usuario and usuario.tiene_permiso('dashboard') %}
+                <a href="/" class="sidebar-link {{ 'active' if request.url.path == '/' else '' }}">
+                    <i data-lucide="layout-dashboard"></i> Dashboard
+                </a>
+                {% endif %}
+                {% if usuario and usuario.tiene_permiso('upload') %}
+                <a href="/upload" class="sidebar-link {{ 'active' if request.url.path == '/upload' else '' }}">
+                    <i data-lucide="upload"></i> Subir PDF
+                </a>
+                {% endif %}
+                {% if usuario and usuario.tiene_permiso('movimientos') %}
+                <a href="/movimientos" class="sidebar-link {{ 'active' if '/movimientos' in request.url.path else '' }}">
+                    <i data-lucide="list"></i> Movimientos
+                </a>
+                {% endif %}
+
+                <div class="sidebar-section">Reportes</div>
+                {% if usuario and usuario.tiene_permiso('reporte') %}
+                <a href="/reporte" class="sidebar-link {{ 'active' if '/reporte' in request.url.path else '' }}">
+                    <i data-lucide="file-text"></i> Ley 25.413
+                </a>
+                {% endif %}
+                {% if usuario and usuario.tiene_permiso('percepciones') %}
+                <a href="/percepciones" class="sidebar-link {{ 'active' if '/percepciones' in request.url.path else '' }}">
+                    <i data-lucide="receipt"></i> Perc/Ret
+                </a>
+                {% endif %}
+                {% if usuario and usuario.tiene_permiso('sircreb') %}
+                <a href="/sircreb" class="sidebar-link {{ 'active' if '/sircreb' in request.url.path else '' }}">
+                    <i data-lucide="building-2"></i> SIRCREB
+                </a>
+                {% endif %}
+                {% if usuario and usuario.tiene_permiso('monotributo') %}
+                <a href="/monotributo" class="sidebar-link {{ 'active' if '/monotributo' in request.url.path else '' }}">
+                    <i data-lucide="calculator"></i> Monotributo
+                </a>
+                {% endif %}
+
+                <div class="sidebar-section">Admin</div>
+                {% if usuario and usuario.tiene_permiso('clientes') %}
+                <a href="/clientes" class="sidebar-link {{ 'active' if '/clientes' in request.url.path else '' }}">
+                    <i data-lucide="users"></i> Clientes
+                </a>
+                {% endif %}
+                {% if usuario and usuario.tiene_permiso('usuarios') %}
+                <a href="/usuarios" class="sidebar-link {{ 'active' if '/usuarios' in request.url.path else '' }}">
+                    <i data-lucide="shield"></i> Usuarios
+                </a>
+                {% endif %}
+            </nav>
+
+            <div class="sidebar-footer">
+                <a href="/logout" class="sidebar-user">
+                    <div class="sidebar-user-avatar">
+                        {% if usuario %}{{ usuario.nombre[0] | upper }}{% endif %}
+                    </div>
+                    <div class="sidebar-user-info">
+                        <div class="sidebar-user-name">{% if usuario %}{{ usuario.nombre }}{% endif %}</div>
+                        <div class="sidebar-user-action">Cerrar sesion</div>
+                    </div>
+                    <i data-lucide="log-out" style="width:16px;height:16px;color:var(--text-muted);"></i>
+                </a>
+            </div>
+        </aside>
+
+        <!-- ===== MAIN ===== -->
+        <div class="main-content">
+            <main class="container">
+                {% block content %}{% endblock %}
+            </main>
+
+            <footer class="footer">
+                Estudio Contable &mdash; Lector de Resumenes Bancarios v0.1.0
+            </footer>
         </div>
-    </nav>
 
-    <main class="container">
-        {% block content %}{% endblock %}
-    </main>
+        <!-- ===== BOTTOM TAB BAR (mobile) ===== -->
+        <div class="bottom-bar">
+            <div class="bottom-bar-inner">
+                {% if usuario and usuario.tiene_permiso('dashboard') %}
+                <a href="/" class="bottom-tab {{ 'active' if request.url.path == '/' else '' }}">
+                    <i data-lucide="layout-dashboard"></i>
+                    <span>Inicio</span>
+                </a>
+                {% endif %}
+                {% if usuario and usuario.tiene_permiso('upload') %}
+                <a href="/upload" class="bottom-tab {{ 'active' if request.url.path == '/upload' else '' }}">
+                    <i data-lucide="upload"></i>
+                    <span>Subir</span>
+                </a>
+                {% endif %}
+                {% if usuario and usuario.tiene_permiso('movimientos') %}
+                <a href="/movimientos" class="bottom-tab {{ 'active' if '/movimientos' in request.url.path else '' }}">
+                    <i data-lucide="list"></i>
+                    <span>Movim.</span>
+                </a>
+                {% endif %}
+                {% if usuario and usuario.tiene_permiso('reporte') %}
+                <a href="/reporte" class="bottom-tab {{ 'active' if '/reporte' in request.url.path else '' }}">
+                    <i data-lucide="file-text"></i>
+                    <span>Reporte</span>
+                </a>
+                {% endif %}
+                <button class="bottom-tab" id="moreBtn" type="button">
+                    <i data-lucide="menu"></i>
+                    <span>Mas</span>
+                </button>
+            </div>
+        </div>
 
-    <footer class="footer">
-        Estudio Contable &mdash; Lector de Resumenes Bancarios v0.1.0
-    </footer>
+        <!-- ===== MORE SHEET (mobile) ===== -->
+        <div class="more-overlay" id="moreOverlay"></div>
+        <div class="more-sheet" id="moreSheet">
+            <div class="more-sheet-handle"></div>
+            <div class="more-sheet-grid">
+                {% if usuario and usuario.tiene_permiso('percepciones') %}
+                <a href="/percepciones" class="more-sheet-item {{ 'active' if '/percepciones' in request.url.path else '' }}">
+                    <i data-lucide="receipt"></i>
+                    Perc/Ret
+                </a>
+                {% endif %}
+                {% if usuario and usuario.tiene_permiso('sircreb') %}
+                <a href="/sircreb" class="more-sheet-item {{ 'active' if '/sircreb' in request.url.path else '' }}">
+                    <i data-lucide="building-2"></i>
+                    SIRCREB
+                </a>
+                {% endif %}
+                {% if usuario and usuario.tiene_permiso('monotributo') %}
+                <a href="/monotributo" class="more-sheet-item {{ 'active' if '/monotributo' in request.url.path else '' }}">
+                    <i data-lucide="calculator"></i>
+                    Monotributo
+                </a>
+                {% endif %}
+                {% if usuario and usuario.tiene_permiso('clientes') %}
+                <a href="/clientes" class="more-sheet-item {{ 'active' if '/clientes' in request.url.path else '' }}">
+                    <i data-lucide="users"></i>
+                    Clientes
+                </a>
+                {% endif %}
+                {% if usuario and usuario.tiene_permiso('usuarios') %}
+                <a href="/usuarios" class="more-sheet-item {{ 'active' if '/usuarios' in request.url.path else '' }}">
+                    <i data-lucide="shield"></i>
+                    Usuarios
+                </a>
+                {% endif %}
+                <a href="/logout" class="more-sheet-item">
+                    <i data-lucide="log-out"></i>
+                    Salir
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+    // Initialize Lucide icons
+    lucide.createIcons();
+
+    // More sheet toggle
+    (function() {
+        var btn = document.getElementById('moreBtn');
+        var overlay = document.getElementById('moreOverlay');
+        var sheet = document.getElementById('moreSheet');
+        if (!btn) return;
+
+        function toggle() {
+            var open = sheet.classList.contains('visible');
+            sheet.classList.toggle('visible', !open);
+            overlay.classList.toggle('visible', !open);
+        }
+        btn.addEventListener('click', toggle);
+        overlay.addEventListener('click', toggle);
+    })();
+    </script>
 
     {% block scripts %}{% endblock %}
 </body>

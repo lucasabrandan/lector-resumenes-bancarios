@@ -10,7 +10,7 @@
 {% if not reporte %}
 <div class="card">
     <div class="empty-state">
-        <div class="empty-icon">&#128203;</div>
+        <div class="empty-icon"><i data-lucide="receipt"></i></div>
         <h2>Sin datos</h2>
         <p>No se encontraron percepciones ni retenciones en los movimientos cargados.</p>
         <p style="color:var(--text-light); font-size:0.85rem;">
@@ -24,28 +24,28 @@
 <!-- Resumen rapido -->
 <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:1rem; margin-bottom:1.5rem;">
     <div class="card stat-card">
-        <div class="stat-icon stat-icon-blue">&#128203;</div>
+        <div class="stat-icon stat-icon-blue"><i data-lucide="receipt"></i></div>
         <div class="stat-body">
             <div class="stat-number">{{ totales.cantidad }}</div>
             <div class="stat-label">Movimientos</div>
         </div>
     </div>
     <div class="card stat-card">
-        <div class="stat-icon stat-icon-red">&#8595;</div>
+        <div class="stat-icon stat-icon-red"><i data-lucide="arrow-down"></i></div>
         <div class="stat-body">
             <div class="stat-number">${{ "{:,.2f}".format(totales.total_percepciones) }}</div>
             <div class="stat-label">Percepciones</div>
         </div>
     </div>
     <div class="card stat-card">
-        <div class="stat-icon stat-icon-purple">&#8595;</div>
+        <div class="stat-icon stat-icon-purple"><i data-lucide="arrow-down"></i></div>
         <div class="stat-body">
             <div class="stat-number">${{ "{:,.2f}".format(totales.total_retenciones) }}</div>
             <div class="stat-label">Retenciones</div>
         </div>
     </div>
     <div class="card stat-card">
-        <div class="stat-icon stat-icon-green">&#9733;</div>
+        <div class="stat-icon stat-icon-green"><i data-lucide="star"></i></div>
         <div class="stat-body">
             <div class="stat-number">${{ "{:,.2f}".format(totales.total_general) }}</div>
             <div class="stat-label">Total (credito fiscal)</div>
@@ -55,7 +55,7 @@
 
 <!-- Boton descargar -->
 <div style="margin-bottom:1.5rem; text-align:right;">
-    <a href="/percepciones/descargar" class="btn btn-success"><span>&#8681;</span> Descargar XLSX</a>
+    <a href="/percepciones/descargar" class="btn btn-success"><i data-lucide="download"></i> Descargar XLSX</a>
 </div>
 
 <!-- Tabla detalle por mes -->
