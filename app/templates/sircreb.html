@@ -1,0 +1,273 @@
+{% extends "base.html" %}
+{% block title %}SIRCREB — Percepciones IIBB{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>SIRCREB — Percepciones y Retenciones IIBB</h1>
+    <p class="subtitle">Importar archivos de SIFERE Web / ARBA y generar reporte por jurisdiccion</p>
+</div>
+
+<!-- Upload -->
+<div class="card">
+    <h2>Importar archivo SIRCREB</h2>
+
+    {% if error %}
+    <div class="alert alert-error">{{ error }}</div>
+    {% endif %}
+
+    {% if exito %}
+    <div class="alert alert-success">{{ exito }}</div>
+    {% endif %}
+
+    <form method="post" enctype="multipart/form-data" action="/sircreb" id="uploadForm">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1rem;">
+            <div>
+                <label for="cliente_id" style="font-size:0.85rem; font-weight:600; display:block; margin-bottom:0.5rem;">Cliente</label>
+                {% if clientes %}
+                <select id="cliente_id" name="cliente_id" required style="width:100%; height:38px;">
+                    <option value="">-- Seleccionar cliente --</option>
+                    {% for c in clientes %}
+                    <option value="{{ c.id }}">{{ c.nombre }}{% if c.cuit %} ({{ c.cuit }}){% endif %}</option>
+                    {% endfor %}
+                </select>
+                {% else %}
+                <p style="color:var(--error); font-size:0.9rem;">No hay clientes. <a href="/clientes">Crea uno primero</a>.</p>
+                {% endif %}
+            </div>
+            <div>
+                <label for="formato" style="font-size:0.85rem; font-weight:600; display:block; margin-bottom:0.5rem;">Formato (opcional)</label>
+                <select id="formato" name="formato" style="width:100%; height:38px;">
+                    <option value="">Autodetectar</option>
+                    <option value="sircar_percepciones">SIRCAR — Percepciones (Convenio Multilateral)</option>
+                    <option value="sircar_retenciones">SIRCAR — Retenciones (Convenio Multilateral)</option>
+                    <option value="arba_percepciones">ARBA — Percepciones (Buenos Aires)</option>
+                    <option value="arba_retenciones">ARBA — Retenciones (Buenos Aires)</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="upload-area" id="uploadArea">
+            <div class="upload-icon">&#128196;</div>
+            <div class="upload-text">
+                <strong>Hace clic aca</strong> o arrastra un archivo TXT
+            </div>
+            <input type="file" id="archivo" name="archivo" accept=".txt,.csv" required>
+            <div class="upload-filename" id="fileName"></div>
+        </div>
+
+        <div style="margin-top:1.25rem; text-align:center;">
+            <button type="submit" class="btn btn-primary" id="submitBtn" {% if not clientes %}disabled{% endif %}>
+                <span class="spinner"></span>
+                <span class="btn-text">Importar archivo</span>
+            </button>
+        </div>
+    </form>
+
+    <div class="help-text">
+        <p><strong>Formatos soportados:</strong></p>
+        <ul style="margin:0.3rem 0 0 1rem; padding:0;">
+            <li><strong>SIRCAR (Convenio Multilateral):</strong> archivo TXT delimitado por comas descargado desde SIFERE Web Consultas. Cubre las 24 jurisdicciones.</li>
+            <li><strong>ARBA (Buenos Aires):</strong> archivo TXT de ancho fijo descargado desde ARBA.</li>
+        </ul>
+        <p style="margin-top:0.5rem; font-size:0.8rem; color:var(--text-light);">
+            El sistema detecta automaticamente el formato. Si falla, selecciona el formato manualmente.
+        </p>
+    </div>
+</div>
+
+<!-- Archivos cargados -->
+{% if archivos_sircreb %}
+<div class="card">
+    <h2>Archivos importados</h2>
+    <div class="table-responsive">
+    <table>
+        <thead>
+            <tr>
+                <th>Archivo</th>
+                <th class="num">Registros</th>
+                <th>Rango de fechas</th>
+                <th class="num">Total</th>
+                <th style="text-align:center;">Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for a in archivos_sircreb %}
+            <tr>
+                <td>{{ a.archivo }}</td>
+                <td class="num">{{ "{:,}".format(a.cantidad) }}</td>
+                <td>{{ a.fecha_desde }} a {{ a.fecha_hasta }}</td>
+                <td class="num">${{ "{:,.2f}".format(a.total) }}</td>
+                <td style="text-align:center;">
+                    <form method="post" action="/sircreb/eliminar" style="display:inline;"
+                          onsubmit="return confirm('Eliminar {{ a.cantidad }} registros de {{ a.archivo }}?');">
+                        <input type="hidden" name="archivo" value="{{ a.archivo }}">
+                        <input type="hidden" name="cliente_id" value="{{ a.cliente_id }}">
+                        <button type="submit" class="btn btn-sm btn-danger">Eliminar</button>
+                    </form>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+{% endif %}
+
+<!-- Reporte -->
+{% if reporte %}
+<div style="margin-bottom:1.5rem; display:flex; justify-content:space-between; align-items:center;">
+    <h2 style="margin:0;">Reporte por jurisdiccion</h2>
+    <a href="/sircreb/descargar" class="btn btn-success"><span>&#8681;</span> Descargar XLSX</a>
+</div>
+
+<!-- Resumen -->
+<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:1rem; margin-bottom:1.5rem;">
+    <div class="card stat-card">
+        <div class="stat-icon stat-icon-blue">&#128203;</div>
+        <div class="stat-body">
+            <div class="stat-number">{{ totales.cantidad }}</div>
+            <div class="stat-label">Registros</div>
+        </div>
+    </div>
+    <div class="card stat-card">
+        <div class="stat-icon stat-icon-red">&#8595;</div>
+        <div class="stat-body">
+            <div class="stat-number">${{ "{:,.2f}".format(totales.total_percepciones) }}</div>
+            <div class="stat-label">Percepciones IIBB</div>
+        </div>
+    </div>
+    <div class="card stat-card">
+        <div class="stat-icon stat-icon-purple">&#8595;</div>
+        <div class="stat-body">
+            <div class="stat-number">${{ "{:,.2f}".format(totales.total_retenciones) }}</div>
+            <div class="stat-label">Retenciones IIBB</div>
+        </div>
+    </div>
+    <div class="card stat-card">
+        <div class="stat-icon stat-icon-green">&#9733;</div>
+        <div class="stat-body">
+            <div class="stat-number">${{ "{:,.2f}".format(totales.total_general) }}</div>
+            <div class="stat-label">Total (pago a cuenta)</div>
+        </div>
+    </div>
+</div>
+
+<!-- Tablas por mes -->
+{% for mes in reporte %}
+<div class="card" style="margin-bottom:1rem;">
+    <div class="card-header">
+        <h2>{{ mes.periodo }}</h2>
+        <span style="font-size:0.85rem; color:var(--text-light);">
+            Total: ${{ "{:,.2f}".format(mes.total_general) }}
+        </span>
+    </div>
+    <div class="table-responsive">
+        <table>
+            <thead>
+                <tr>
+                    <th>Jurisdiccion</th>
+                    <th>Tipo</th>
+                    <th class="num">Cantidad</th>
+                    <th class="num">Importe</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for linea in mes.lineas %}
+                <tr>
+                    <td>{{ linea.jurisdiccion_nombre }}</td>
+                    <td>
+                        {% if linea.es_retencion %}
+                        <span class="badge" style="background:#f3e8ff; color:#7c3aed;">Ret.</span>
+                        {% else %}
+                        <span class="badge" style="background:#dbeafe; color:#2563eb;">Perc.</span>
+                        {% endif %}
+                    </td>
+                    <td class="num">{{ linea.cantidad }}</td>
+                    <td class="num">${{ "{:,.2f}".format(linea.total) }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr class="total-row">
+                    <td colspan="2"><strong>Subtotal</strong></td>
+                    <td class="num"><strong>{{ mes.lineas | sum(attribute='cantidad') }}</strong></td>
+                    <td class="num"><strong>${{ "{:,.2f}".format(mes.total_general) }}</strong></td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+</div>
+{% endfor %}
+{% elif not error and not exito %}
+<div class="card">
+    <div class="empty-state">
+        <div class="empty-icon">&#128203;</div>
+        <h2>Sin datos SIRCREB</h2>
+        <p>No se encontraron percepciones/retenciones de IIBB importadas.</p>
+        <p style="color:var(--text-light); font-size:0.85rem;">
+            Descarga el archivo TXT desde SIFERE Web Consultas o ARBA e importalo arriba.
+        </p>
+    </div>
+</div>
+{% endif %}
+
+<!-- Leyenda -->
+<div class="card" style="font-size:0.85rem; color:var(--text-light);">
+    <strong>Como obtener el archivo:</strong>
+    <ol style="margin:0.5rem 0 0 1rem; padding:0;">
+        <li>Ingresar a AFIP con clave fiscal.</li>
+        <li>Acceder al servicio "Convenio Multilateral - SIRCREB - Contribuyentes".</li>
+        <li>Ir a SIFERE > Deducciones y retenciones.</li>
+        <li>Exportar archivo con Recaudaciones Bancarias para uso en SIFERE Web.</li>
+        <li>Subir el archivo TXT descargado en esta pagina.</li>
+    </ol>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var area = document.getElementById('uploadArea');
+    var input = document.getElementById('archivo');
+    var fileNameEl = document.getElementById('fileName');
+    var form = document.getElementById('uploadForm');
+    var btn = document.getElementById('submitBtn');
+
+    area.addEventListener('click', function() { input.click(); });
+
+    input.addEventListener('change', function() {
+        if (input.files.length > 0) {
+            fileNameEl.textContent = input.files[0].name;
+            fileNameEl.classList.add('visible');
+        }
+    });
+
+    ['dragenter', 'dragover'].forEach(function(evt) {
+        area.addEventListener(evt, function(e) {
+            e.preventDefault();
+            area.classList.add('dragover');
+        });
+    });
+    ['dragleave', 'drop'].forEach(function(evt) {
+        area.addEventListener(evt, function(e) {
+            e.preventDefault();
+            area.classList.remove('dragover');
+        });
+    });
+    area.addEventListener('drop', function(e) {
+        var files = e.dataTransfer.files;
+        if (files.length > 0) {
+            input.files = files;
+            fileNameEl.textContent = files[0].name;
+            fileNameEl.classList.add('visible');
+        }
+    });
+
+    form.addEventListener('submit', function() {
+        btn.classList.add('loading');
+        btn.disabled = true;
+    });
+});
+</script>
+{% endblock %}

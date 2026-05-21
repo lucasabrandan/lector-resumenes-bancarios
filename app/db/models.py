@@ -16,7 +16,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base
 
 
-TODOS_LOS_PERMISOS = ["dashboard", "upload", "movimientos", "reporte", "percepciones", "monotributo", "clientes", "usuarios"]
+TODOS_LOS_PERMISOS = ["dashboard", "upload", "movimientos", "reporte", "percepciones", "sircreb", "monotributo", "clientes", "usuarios"]
 
 
 class UsuarioClienteDB(Base):
@@ -148,4 +148,36 @@ class ComprobanteDB(Base):
 
     __table_args__ = (
         Index("ix_comprobantes_cliente_fecha", "cliente_id", "fecha"),
+    )
+
+
+class PercepcionIIBBDB(Base):
+    """Percepción o retención de IIBB importada desde SIRCREB/ARBA."""
+
+    __tablename__ = "percepciones_iibb"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+
+    cliente_id: Mapped[int] = mapped_column(Integer, ForeignKey("clientes.id", ondelete="CASCADE"), nullable=False)
+    cliente: Mapped["ClienteDB"] = relationship("ClienteDB")
+
+    jurisdiccion: Mapped[int] = mapped_column(Integer, nullable=False)
+    jurisdiccion_nombre: Mapped[str] = mapped_column(String(50), nullable=False)
+    cuit_agente: Mapped[str] = mapped_column(String(13), nullable=False)
+    fecha: Mapped[date] = mapped_column(Date, nullable=False)
+    tipo: Mapped[str] = mapped_column(String(20), nullable=False)  # PERCEPCION / RETENCION
+    monto_sujeto: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
+    alicuota: Mapped[float | None] = mapped_column(Numeric(6, 2))
+    monto_retenido: Mapped[float] = mapped_column(Numeric(14, 2), nullable=False)
+    regimen: Mapped[str | None] = mapped_column(String(10))
+    tipo_comprobante: Mapped[str | None] = mapped_column(String(5))
+    letra_comprobante: Mapped[str | None] = mapped_column(String(1))
+    numero_comprobante: Mapped[str | None] = mapped_column(String(20))
+
+    archivo_origen: Mapped[str | None] = mapped_column(String(255))
+    creado: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index("ix_percepciones_iibb_cliente_fecha", "cliente_id", "fecha"),
+        Index("ix_percepciones_iibb_jurisdiccion", "jurisdiccion"),
     )

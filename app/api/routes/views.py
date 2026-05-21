@@ -59,6 +59,16 @@ from app.services.comprobantes import (
 )
 from app.parsers.arca_comprobantes import parsear_archivo
 from app.parsers.supervielle_pdf import ParserError, ErrorValidacionSaldo
+from app.parsers.sircreb import parsear_sircreb
+from app.services.sircreb import (
+    guardar_percepciones_iibb,
+    archivo_sircreb_ya_cargado,
+    eliminar_sircreb_por_archivo,
+    listar_archivos_sircreb,
+    generar_reporte_sircreb,
+    resumen_totales_sircreb,
+    exportar_sircreb_xlsx,
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -323,6 +333,122 @@ async def descargar_percepciones(request: Request, db: Session = Depends(get_db)
 
 
 # --------------------------------------------------------------------------
+# SIRCREB — Percepciones/Retenciones IIBB
+# --------------------------------------------------------------------------
+
+
+def _sircreb_ctx(request: Request, db: Session, **kwargs) -> dict:
+    """Contexto comun para la pagina SIRCREB."""
+    cids = _get_cliente_ids(request, db)
+    usuario = getattr(request.state, "usuario", None)
+    clientes_disponibles = listar_clientes_de_usuario(usuario, db) if usuario else []
+    archivos = listar_archivos_sircreb(db, cliente_ids=cids)
+    reporte = generar_reporte_sircreb(db, cliente_ids=cids)
+    totales = resumen_totales_sircreb(reporte) if reporte else None
+    return _ctx(
+        request,
+        clientes=clientes_disponibles,
+        archivos_sircreb=archivos,
+        reporte=reporte,
+        totales=totales,
+        **kwargs,
+    )
+
+
+@router.get("/sircreb", response_class=HTMLResponse)
+async def sircreb_page(request: Request, db: Session = Depends(get_db)):
+    return templates.TemplateResponse("sircreb.html", _sircreb_ctx(request, db))
+
+
+@router.post("/sircreb")
+async def sircreb_upload(request: Request, db: Session = Depends(get_db)):
+    """Sube un archivo SIRCREB (TXT)."""
+    form = await request.form()
+    archivo = form.get("archivo")
+    cliente_id_str = str(form.get("cliente_id", ""))
+    cliente_id = int(cliente_id_str) if cliente_id_str else None
+    formato = str(form.get("formato", "")).strip() or None
+
+    if not archivo or not getattr(archivo, "filename", None):
+        return templates.TemplateResponse("sircreb.html",
+            _sircreb_ctx(request, db, error="Selecciona un archivo."))
+
+    ext = archivo.filename.lower().rsplit(".", 1)[-1] if "." in archivo.filename else ""
+    if ext not in ("txt", "csv"):
+        return templates.TemplateResponse("sircreb.html",
+            _sircreb_ctx(request, db, error="Solo se aceptan archivos TXT o CSV."))
+
+    if not cliente_id:
+        return templates.TemplateResponse("sircreb.html",
+            _sircreb_ctx(request, db, error="Selecciona un cliente."))
+
+    existentes = archivo_sircreb_ya_cargado(archivo.filename, cliente_id, db)
+    if existentes > 0:
+        return templates.TemplateResponse("sircreb.html",
+            _sircreb_ctx(request, db,
+                error=f"El archivo '{archivo.filename}' ya fue cargado ({existentes} registros). Eliminalo primero si queres reprocesarlo."))
+
+    contenido_bytes = await archivo.read()
+    try:
+        contenido = contenido_bytes.decode("latin-1")
+    except UnicodeDecodeError:
+        contenido = contenido_bytes.decode("utf-8", errors="replace")
+
+    try:
+        resultado = parsear_sircreb(contenido, archivo.filename, formato)
+    except Exception as e:
+        logger.exception("Error parseando SIRCREB '%s'", archivo.filename)
+        return templates.TemplateResponse("sircreb.html",
+            _sircreb_ctx(request, db,
+                error=f"Error al leer '{archivo.filename}': {e}"))
+
+    if resultado.errores and not resultado.percepciones:
+        errores_txt = "; ".join(resultado.errores[:5])
+        return templates.TemplateResponse("sircreb.html",
+            _sircreb_ctx(request, db,
+                error=f"No se pudieron parsear registros de '{archivo.filename}'. Errores: {errores_txt}"))
+
+    if not resultado.percepciones:
+        return templates.TemplateResponse("sircreb.html",
+            _sircreb_ctx(request, db,
+                error=f"No se encontraron percepciones/retenciones en '{archivo.filename}'. Verifica el formato del archivo."))
+
+    cantidad = guardar_percepciones_iibb(resultado.percepciones, cliente_id, archivo.filename, db)
+    msg = f"Se importaron {cantidad:,} registros desde '{archivo.filename}' (formato: {resultado.formato_detectado})."
+    if resultado.errores:
+        msg += f" {len(resultado.errores)} lineas con errores fueron ignoradas."
+
+    return templates.TemplateResponse("sircreb.html",
+        _sircreb_ctx(request, db, exito=msg))
+
+
+@router.post("/sircreb/eliminar")
+async def sircreb_eliminar(request: Request, db: Session = Depends(get_db)):
+    form = await request.form()
+    archivo = str(form.get("archivo", ""))
+    cliente_id = int(str(form.get("cliente_id", "0")))
+
+    if archivo and cliente_id:
+        eliminados = eliminar_sircreb_por_archivo(archivo, cliente_id, db)
+        return templates.TemplateResponse("sircreb.html",
+            _sircreb_ctx(request, db,
+                exito=f"Se eliminaron {eliminados} registros del archivo '{archivo}'."))
+    return RedirectResponse("/sircreb", status_code=303)
+
+
+@router.get("/sircreb/descargar")
+async def sircreb_descargar(request: Request, db: Session = Depends(get_db)):
+    cids = _get_cliente_ids(request, db)
+    reporte = generar_reporte_sircreb(db, cliente_ids=cids)
+    xlsx = exportar_sircreb_xlsx(reporte)
+    return StreamingResponse(
+        xlsx,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=sircreb_iibb.xlsx"},
+    )
+
+
+# --------------------------------------------------------------------------
 # Panel de Monotributo
 # --------------------------------------------------------------------------
 
@@ -428,6 +554,7 @@ ETIQUETAS_PERMISOS = {
     "movimientos": "Movimientos",
     "reporte": "Reportes",
     "percepciones": "Percepciones/Retenciones",
+    "sircreb": "SIRCREB (IIBB)",
     "monotributo": "Panel Monotributo",
     "clientes": "Gestionar clientes",
     "usuarios": "Gestionar usuarios",
@@ -439,6 +566,7 @@ DESCRIPCIONES_PERMISOS = {
     "movimientos": "ver lista de movimientos",
     "reporte": "ver y descargar reporte Ley 25.413",
     "percepciones": "ver reporte de percepciones y retenciones sufridas",
+    "sircreb": "importar archivos SIRCREB y ver percepciones IIBB por jurisdiccion",
     "monotributo": "ver panel de monotributo y cargar comprobantes",
     "clientes": "crear, editar y eliminar clientes",
     "usuarios": "administrar usuarios y permisos",

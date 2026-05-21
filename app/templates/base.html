@@ -37,6 +37,11 @@
                 <span class="nav-icon">&#128203;</span> Perc/Ret
             </a>
             {% endif %}
+            {% if usuario and usuario.tiene_permiso('sircreb') %}
+            <a href="/sircreb" class="nav-link {{ 'active' if '/sircreb' in request.url.path else '' }}">
+                <span class="nav-icon">&#127970;</span> SIRCREB
+            </a>
+            {% endif %}
             {% if usuario and usuario.tiene_permiso('monotributo') %}
             <a href="/monotributo" class="nav-link {{ 'active' if '/monotributo' in request.url.path else '' }}">
                 <span class="nav-icon">&#9830;</span> Monotributo
