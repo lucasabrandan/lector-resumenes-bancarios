@@ -7,7 +7,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;550;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/style.css?v=3">
     <script src="https://unpkg.com/htmx.org@1.9.12"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     {% block head %}{% endblock %}
@@ -56,6 +56,11 @@
                 {% if usuario and usuario.tiene_permiso('sircreb') %}
                 <a href="/sircreb" class="sidebar-link {{ 'active' if '/sircreb' in request.url.path else '' }}">
                     <i data-lucide="building-2"></i> SIRCREB
+                </a>
+                {% endif %}
+                {% if usuario and usuario.tiene_permiso('movimientos') %}
+                <a href="/mercadopago" class="sidebar-link {{ 'active' if '/mercadopago' in request.url.path else '' }}">
+                    <i data-lucide="wallet"></i> MercadoPago
                 </a>
                 {% endif %}
                 {% if usuario and usuario.tiene_permiso('monotributo') %}
@@ -140,6 +145,7 @@
         <div class="more-overlay" id="moreOverlay"></div>
         <div class="more-sheet" id="moreSheet">
             <div class="more-sheet-handle"></div>
+            <div class="more-sheet-section-label">Reportes</div>
             <div class="more-sheet-grid">
                 {% if usuario and usuario.tiene_permiso('percepciones') %}
                 <a href="/percepciones" class="more-sheet-item {{ 'active' if '/percepciones' in request.url.path else '' }}">
@@ -153,12 +159,21 @@
                     SIRCREB
                 </a>
                 {% endif %}
+                {% if usuario and usuario.tiene_permiso('movimientos') %}
+                <a href="/mercadopago" class="more-sheet-item {{ 'active' if '/mercadopago' in request.url.path else '' }}">
+                    <i data-lucide="wallet"></i>
+                    MercadoPago
+                </a>
+                {% endif %}
                 {% if usuario and usuario.tiene_permiso('monotributo') %}
                 <a href="/monotributo" class="more-sheet-item {{ 'active' if '/monotributo' in request.url.path else '' }}">
                     <i data-lucide="calculator"></i>
                     Monotributo
                 </a>
                 {% endif %}
+            </div>
+            <div class="more-sheet-section-label">Administracion</div>
+            <div class="more-sheet-grid">
                 {% if usuario and usuario.tiene_permiso('clientes') %}
                 <a href="/clientes" class="more-sheet-item {{ 'active' if '/clientes' in request.url.path else '' }}">
                     <i data-lucide="users"></i>
@@ -171,10 +186,26 @@
                     Usuarios
                 </a>
                 {% endif %}
-                <a href="/logout" class="more-sheet-item">
+                <a href="/logout" class="more-sheet-item more-sheet-item-logout">
                     <i data-lucide="log-out"></i>
-                    Salir
+                    Cerrar sesion
                 </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast container -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Confirm modal -->
+    <div class="modal-overlay" id="confirmModal">
+        <div class="modal-box">
+            <div class="modal-icon"><i data-lucide="alert-triangle"></i></div>
+            <div class="modal-title" id="confirmTitle">Confirmar</div>
+            <div class="modal-msg" id="confirmMsg"></div>
+            <div class="modal-actions">
+                <button class="btn" id="confirmCancel">Cancelar</button>
+                <button class="btn btn-danger" id="confirmOk">Eliminar</button>
             </div>
         </div>
     </div>
@@ -198,6 +229,75 @@
         btn.addEventListener('click', toggle);
         overlay.addEventListener('click', toggle);
     })();
+
+    // --- Toast system ---
+    window.showToast = function(message, type) {
+        type = type || 'success';
+        var container = document.getElementById('toastContainer');
+        var toast = document.createElement('div');
+        toast.className = 'toast toast-' + type;
+        var icon = type === 'success' ? 'check-circle' : 'alert-circle';
+        toast.innerHTML =
+            '<span class="toast-icon"><i data-lucide="' + icon + '"></i></span>' +
+            '<span class="toast-msg">' + message + '</span>' +
+            '<button class="toast-close" onclick="this.parentElement.remove()"><i data-lucide="x"></i></button>' +
+            '<div class="toast-progress"></div>';
+        container.appendChild(toast);
+        lucide.createIcons({nameAttr: 'data-lucide', attrs: {}});
+        setTimeout(function() {
+            toast.classList.add('removing');
+            setTimeout(function() { toast.remove(); }, 300);
+        }, 4000);
+    };
+
+    // --- Confirm modal system ---
+    window.confirmAction = function(title, message, callback) {
+        var modal = document.getElementById('confirmModal');
+        document.getElementById('confirmTitle').textContent = title;
+        document.getElementById('confirmMsg').textContent = message;
+        modal.classList.add('visible');
+
+        var okBtn = document.getElementById('confirmOk');
+        var cancelBtn = document.getElementById('confirmCancel');
+
+        function cleanup() {
+            modal.classList.remove('visible');
+            okBtn.replaceWith(okBtn.cloneNode(true));
+            cancelBtn.replaceWith(cancelBtn.cloneNode(true));
+        }
+
+        okBtn.addEventListener('click', function() {
+            cleanup();
+            callback();
+        }, {once: true});
+
+        cancelBtn.addEventListener('click', function() {
+            cleanup();
+        }, {once: true});
+
+        modal.addEventListener('click', function(e) {
+            if (e.target === modal) cleanup();
+        }, {once: true});
+    };
+
+    // Auto-attach to forms with data-confirm
+    document.querySelectorAll('form[data-confirm]').forEach(function(form) {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            var msg = form.getAttribute('data-confirm');
+            var title = form.getAttribute('data-confirm-title') || 'Confirmar eliminacion';
+            window.confirmAction(title, msg, function() {
+                form.submit();
+            });
+        });
+    });
+
+    // Auto-convert static alerts to toasts
+    document.querySelectorAll('.alert[data-toast]').forEach(function(el) {
+        var type = el.classList.contains('alert-success') ? 'success' : 'error';
+        window.showToast(el.textContent.trim(), type);
+        el.remove();
+    });
     </script>
 
     {% block scripts %}{% endblock %}

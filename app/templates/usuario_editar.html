@@ -2,13 +2,18 @@
 {% block title %}Editar {{ usuario_edit.username }} — Lector de Resumenes{% endblock %}
 
 {% block content %}
+<div class="breadcrumb">
+    <a href="/usuarios">Usuarios</a>
+    <span class="breadcrumb-sep">/</span>
+    <span class="breadcrumb-current">{{ usuario_edit.username }}</span>
+</div>
 <div class="page-header">
     <h1>Editar usuario: {{ usuario_edit.username }}</h1>
     <p class="subtitle">Modificar datos, permisos o contrasena.</p>
 </div>
 
 {% if exito %}
-<div class="alert alert-success">{{ exito }}</div>
+<div class="alert alert-success" data-toast>{{ exito }}</div>
 {% endif %}
 
 <div class="card">

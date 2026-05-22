@@ -12,11 +12,11 @@
     <h2>Importar archivo SIRCREB</h2>
 
     {% if error %}
-    <div class="alert alert-error">{{ error }}</div>
+    <div class="alert alert-error" data-toast>{{ error }}</div>
     {% endif %}
 
     {% if exito %}
-    <div class="alert alert-success">{{ exito }}</div>
+    <div class="alert alert-success" data-toast>{{ exito }}</div>
     {% endif %}
 
     <form method="post" enctype="multipart/form-data" action="/sircreb" id="uploadForm">
@@ -99,7 +99,8 @@
                 <td class="num">${{ "{:,.2f}".format(a.total) }}</td>
                 <td style="text-align:center;">
                     <form method="post" action="/sircreb/eliminar" style="display:inline;"
-                          onsubmit="return confirm('Eliminar {{ a.cantidad }} registros de {{ a.archivo }}?');">
+                          data-confirm="Se eliminaran {{ a.cantidad }} registros del archivo {{ a.archivo }}. Esta accion no se puede deshacer."
+                          data-confirm-title="Eliminar archivo SIRCREB">
                         <input type="hidden" name="archivo" value="{{ a.archivo }}">
                         <input type="hidden" name="cliente_id" value="{{ a.cliente_id }}">
                         <button type="submit" class="btn btn-sm btn-danger">Eliminar</button>

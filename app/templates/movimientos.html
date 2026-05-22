@@ -35,6 +35,9 @@
             <div class="filter-actions">
                 <button type="submit" class="btn btn-primary btn-sm">Filtrar</button>
                 <a href="/movimientos" class="btn btn-sm">Limpiar</a>
+                <a href="/movimientos/descargar?{{ '&tipo=' + tipo_filtro if tipo_filtro else '' }}{{ '&buscar=' + buscar if buscar else '' }}{{ '&fecha_desde=' + fecha_desde if fecha_desde else '' }}{{ '&fecha_hasta=' + fecha_hasta if fecha_hasta else '' }}" class="btn btn-sm" title="Descargar XLSX con los filtros aplicados">
+                    <i data-lucide="download"></i> XLSX
+                </a>
             </div>
         </div>
     </form>

@@ -2,13 +2,18 @@
 {% block title %}Editar {{ cliente.nombre }} — Lector de Resumenes{% endblock %}
 
 {% block content %}
+<div class="breadcrumb">
+    <a href="/clientes">Clientes</a>
+    <span class="breadcrumb-sep">/</span>
+    <span class="breadcrumb-current">{{ cliente.nombre }}</span>
+</div>
 <div class="page-header">
     <h1>Editar cliente: {{ cliente.nombre }}</h1>
     <p class="subtitle">Modificar datos y asignar usuarios.</p>
 </div>
 
 {% if exito %}
-<div class="alert alert-success">{{ exito }}</div>
+<div class="alert alert-success" data-toast>{{ exito }}</div>
 {% endif %}
 
 <div class="card">

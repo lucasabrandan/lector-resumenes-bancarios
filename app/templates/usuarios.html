@@ -8,10 +8,10 @@
 </div>
 
 {% if error %}
-<div class="alert alert-error">{{ error }}</div>
+<div class="alert alert-error" data-toast>{{ error }}</div>
 {% endif %}
 {% if exito %}
-<div class="alert alert-success">{{ exito }}</div>
+<div class="alert alert-success" data-toast>{{ exito }}</div>
 {% endif %}
 
 <!-- Formulario crear usuario -->
@@ -56,6 +56,7 @@
 <!-- Lista de usuarios -->
 <div class="card">
     <h2>Usuarios registrados</h2>
+    {% if usuarios %}
     <div class="table-responsive">
         <table>
             <thead>
@@ -88,7 +89,8 @@
                         <a href="/usuarios/{{ u.id }}/editar" class="btn btn-sm">Editar</a>
                         {% if usuario and u.id != usuario.id %}
                         <form method="post" action="/usuarios/{{ u.id }}/eliminar"
-                              onsubmit="return confirm('Eliminar a {{ u.username }}?')">
+                              data-confirm="Se eliminara al usuario {{ u.username }} ({{ u.nombre }}). Esta accion no se puede deshacer."
+                              data-confirm-title="Eliminar usuario">
                             <button type="submit" class="btn btn-sm btn-danger">Eliminar</button>
                         </form>
                         {% endif %}
@@ -98,5 +100,11 @@
             </tbody>
         </table>
     </div>
+    {% else %}
+    <div class="empty-state">
+        <div class="empty-icon"><i data-lucide="shield"></i></div>
+        <p>No hay usuarios registrados.</p>
+    </div>
+    {% endif %}
 </div>
 {% endblock %}

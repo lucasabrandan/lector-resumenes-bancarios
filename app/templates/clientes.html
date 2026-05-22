@@ -8,10 +8,10 @@
 </div>
 
 {% if error %}
-<div class="alert alert-error">{{ error }}</div>
+<div class="alert alert-error" data-toast>{{ error }}</div>
 {% endif %}
 {% if exito %}
-<div class="alert alert-success">{{ exito }}</div>
+<div class="alert alert-success" data-toast>{{ exito }}</div>
 {% endif %}
 
 <!-- Formulario crear cliente -->
@@ -79,7 +79,8 @@
                     <td style="display:flex; gap:0.5rem;">
                         <a href="/clientes/{{ c.id }}/editar" class="btn btn-sm">Editar</a>
                         <form method="post" action="/clientes/{{ c.id }}/eliminar"
-                              onsubmit="return confirm('Eliminar al cliente {{ c.nombre }}? Se desvincularan sus movimientos.')">
+                              data-confirm="Se eliminara al cliente {{ c.nombre }} y se desvincularan todos sus movimientos. Esta accion no se puede deshacer."
+                              data-confirm-title="Eliminar cliente">
                             <button type="submit" class="btn btn-sm btn-danger">Eliminar</button>
                         </form>
                     </td>

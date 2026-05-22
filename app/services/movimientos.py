@@ -14,9 +14,15 @@ from pathlib import Path
 from sqlalchemy import func, extract
 from sqlalchemy.orm import Session
 
-from app.db.models import MovimientoDB
+from app.db.models import ComprobanteDB, MovimientoDB, PercepcionIIBBDB
 from app.domain.models import MovimientoBancario, SignoMovimiento, TipoMovimiento, Moneda
+from io import BytesIO
+
+from openpyxl import Workbook
+from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
 from app.parsers.supervielle_pdf import ParserSupervielle
+from app.parsers.mercadopago_pdf import ParserMercadoPago, ResumenMP, es_pdf_mercadopago
 
 
 def archivo_ya_cargado(nombre_archivo: str, db: Session) -> int:
@@ -28,14 +34,23 @@ def archivo_ya_cargado(nombre_archivo: str, db: Session) -> int:
     )
 
 
-def procesar_pdf(ruta_pdf: Path, db: Session, cliente_id: int | None = None) -> int:
-    """Parsea un PDF de Supervielle y guarda los movimientos en la DB.
+def procesar_pdf(
+    ruta_pdf: Path, db: Session, cliente_id: int | None = None
+) -> tuple[int, ResumenMP | None]:
+    """Parsea un PDF bancario y guarda los movimientos en la DB.
+
+    Auto-detecta si es MercadoPago o Supervielle.
 
     Returns:
-        Cantidad de movimientos guardados.
+        (cantidad_movimientos, resumen_mp_o_None)
     """
-    parser = ParserSupervielle()
-    movimientos = parser.parsear(ruta_pdf)
+    resumen_mp = None
+    if es_pdf_mercadopago(ruta_pdf):
+        parser = ParserMercadoPago()
+        movimientos, resumen_mp = parser.parsear_con_resumen(ruta_pdf)
+    else:
+        parser = ParserSupervielle()
+        movimientos = parser.parsear(ruta_pdf)
 
     nombre_archivo = ruta_pdf.name
 
@@ -61,7 +76,37 @@ def procesar_pdf(ruta_pdf: Path, db: Session, cliente_id: int | None = None) -> 
 
     db.add_all(registros)
     db.commit()
-    return len(registros)
+    return len(registros), resumen_mp
+
+
+def limpiar_todos_los_datos(db: Session, cliente_ids: list[int] | None = None) -> dict[str, int]:
+    """Elimina todos los movimientos, comprobantes y percepciones IIBB.
+
+    Si cliente_ids es None (admin), borra todo. Si no, solo los del usuario.
+    Devuelve dict con cantidades eliminadas por tabla.
+    """
+    resultado = {}
+
+    # Movimientos
+    q = db.query(MovimientoDB)
+    if cliente_ids is not None:
+        q = q.filter(MovimientoDB.cliente_id.in_(cliente_ids))
+    resultado["movimientos"] = q.delete(synchronize_session=False)
+
+    # Comprobantes
+    q = db.query(ComprobanteDB)
+    if cliente_ids is not None:
+        q = q.filter(ComprobanteDB.cliente_id.in_(cliente_ids))
+    resultado["comprobantes"] = q.delete(synchronize_session=False)
+
+    # Percepciones IIBB
+    q = db.query(PercepcionIIBBDB)
+    if cliente_ids is not None:
+        q = q.filter(PercepcionIIBBDB.cliente_id.in_(cliente_ids))
+    resultado["percepciones_iibb"] = q.delete(synchronize_session=False)
+
+    db.commit()
+    return resultado
 
 
 def eliminar_por_archivo(nombre_archivo: str, db: Session) -> int:
@@ -233,3 +278,193 @@ def distribucion_mensual(db: Session, cliente_ids: list[int] | None = None) -> d
             "total": float(r.total),
         })
     return resultado
+
+
+def resumen_mercadopago(db: Session, cliente_ids: list[int] | None = None) -> dict | None:
+    """Genera resumen de movimientos MercadoPago.
+
+    Returns None si no hay movimientos MP.
+    """
+    base = db.query(MovimientoDB).filter(MovimientoDB.banco == "MERCADOPAGO")
+    base = _aplicar_filtro_clientes(base, cliente_ids)
+
+    total = base.count()
+    if total == 0:
+        return None
+
+    # Totales generales
+    totales = (
+        db.query(
+            MovimientoDB.signo,
+            func.sum(MovimientoDB.importe).label("total"),
+            func.count(MovimientoDB.id).label("cantidad"),
+        )
+        .filter(MovimientoDB.banco == "MERCADOPAGO")
+    )
+    totales = _aplicar_filtro_clientes(totales, cliente_ids)
+    totales = totales.group_by(MovimientoDB.signo).all()
+
+    entradas = 0.0
+    salidas = 0.0
+    cant_entradas = 0
+    cant_salidas = 0
+    for r in totales:
+        if r.signo == "CREDITO":
+            entradas = float(r.total)
+            cant_entradas = r.cantidad
+        else:
+            salidas = float(r.total)
+            cant_salidas = r.cantidad
+
+    # Rango de fechas
+    fechas = (
+        db.query(
+            func.min(MovimientoDB.fecha).label("desde"),
+            func.max(MovimientoDB.fecha).label("hasta"),
+        )
+        .filter(MovimientoDB.banco == "MERCADOPAGO")
+    )
+    fechas = _aplicar_filtro_clientes(fechas, cliente_ids)
+    fechas = fechas.first()
+
+    # Distribucion por tipo
+    por_tipo = (
+        db.query(
+            MovimientoDB.tipo,
+            MovimientoDB.signo,
+            func.sum(MovimientoDB.importe).label("total"),
+            func.count(MovimientoDB.id).label("cantidad"),
+        )
+        .filter(MovimientoDB.banco == "MERCADOPAGO")
+    )
+    por_tipo = _aplicar_filtro_clientes(por_tipo, cliente_ids)
+    por_tipo = (
+        por_tipo
+        .group_by(MovimientoDB.tipo, MovimientoDB.signo)
+        .order_by(func.sum(MovimientoDB.importe).desc())
+        .all()
+    )
+
+    # Distribucion mensual
+    mensual = (
+        db.query(
+            extract("year", MovimientoDB.fecha).label("anio"),
+            extract("month", MovimientoDB.fecha).label("mes"),
+            MovimientoDB.signo,
+            func.sum(MovimientoDB.importe).label("total"),
+        )
+        .filter(MovimientoDB.banco == "MERCADOPAGO")
+    )
+    mensual = _aplicar_filtro_clientes(mensual, cliente_ids)
+    mensual = (
+        mensual
+        .group_by("anio", "mes", MovimientoDB.signo)
+        .order_by("anio", "mes")
+        .all()
+    )
+
+    meses_data = {}
+    for r in mensual:
+        clave = f"{int(r.anio)}-{int(r.mes):02d}"
+        if clave not in meses_data:
+            meses_data[clave] = {"entradas": 0.0, "salidas": 0.0}
+        if r.signo == "CREDITO":
+            meses_data[clave]["entradas"] = float(r.total)
+        else:
+            meses_data[clave]["salidas"] = float(r.total)
+
+    return {
+        "total": total,
+        "entradas": entradas,
+        "salidas": salidas,
+        "cant_entradas": cant_entradas,
+        "cant_salidas": cant_salidas,
+        "neto": entradas - salidas,
+        "fecha_desde": fechas.desde if fechas else None,
+        "fecha_hasta": fechas.hasta if fechas else None,
+        "por_tipo": [
+            {"tipo": r.tipo, "signo": r.signo, "total": float(r.total), "cantidad": r.cantidad}
+            for r in por_tipo
+        ],
+        "meses": meses_data,
+    }
+
+
+def exportar_movimientos_xlsx(movimientos: list[MovimientoDB]) -> BytesIO:
+    """Genera un XLSX con el listado de movimientos."""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Movimientos"
+
+    header_font = Font(bold=True, color="FFFFFF", size=11)
+    header_fill = PatternFill(start_color="2563EB", end_color="2563EB", fill_type="solid")
+    money_format = '#,##0.00'
+    thin_border = Border(
+        bottom=Side(style="thin", color="E5E7EB"),
+    )
+
+    headers = ["Fecha", "Banco", "Cuenta", "Concepto", "Detalle", "Tipo", "Signo", "Importe", "Saldo", "ID Operación", "Archivo"]
+    for col, header in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col, value=header)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center")
+
+    for i, m in enumerate(movimientos, 2):
+        ws.cell(row=i, column=1, value=m.fecha.isoformat() if m.fecha else "")
+        ws.cell(row=i, column=2, value=m.banco)
+        ws.cell(row=i, column=3, value=m.cuenta)
+        ws.cell(row=i, column=4, value=m.concepto)
+        ws.cell(row=i, column=5, value=m.detalle_adicional or "")
+        ws.cell(row=i, column=6, value=m.tipo)
+        ws.cell(row=i, column=7, value=m.signo)
+        ws.cell(row=i, column=8, value=float(m.importe)).number_format = money_format
+        ws.cell(row=i, column=9, value=float(m.saldo_posterior) if m.saldo_posterior is not None else "").number_format = money_format
+        ws.cell(row=i, column=10, value=m.numero_operacion or "")
+        ws.cell(row=i, column=11, value=m.archivo_origen or "")
+        for col in range(1, 12):
+            ws.cell(row=i, column=col).border = thin_border
+
+    # Fila de totales
+    if movimientos:
+        total_row = len(movimientos) + 2
+        total_font = Font(bold=True, size=11)
+        total_fill = PatternFill(start_color="F3F4F6", end_color="F3F4F6", fill_type="solid")
+
+        total_debitos = sum(float(m.importe) for m in movimientos if m.signo == "DEBITO")
+        total_creditos = sum(float(m.importe) for m in movimientos if m.signo == "CREDITO")
+
+        ws.cell(row=total_row, column=6, value="DÉBITOS:").font = total_font
+        ws.cell(row=total_row, column=7, value="DEBITO").font = total_font
+        ws.cell(row=total_row, column=8, value=total_debitos).number_format = money_format
+        ws.cell(row=total_row, column=8).font = total_font
+
+        ws.cell(row=total_row + 1, column=6, value="CRÉDITOS:").font = total_font
+        ws.cell(row=total_row + 1, column=7, value="CREDITO").font = total_font
+        ws.cell(row=total_row + 1, column=8, value=total_creditos).number_format = money_format
+        ws.cell(row=total_row + 1, column=8).font = total_font
+
+        ws.cell(row=total_row + 2, column=6, value="NETO:").font = total_font
+        ws.cell(row=total_row + 2, column=8, value=total_creditos - total_debitos).number_format = money_format
+        ws.cell(row=total_row + 2, column=8).font = total_font
+
+        for r in range(total_row, total_row + 3):
+            for col in range(1, 12):
+                ws.cell(row=r, column=col).fill = total_fill
+
+    ws.column_dimensions["A"].width = 12
+    ws.column_dimensions["B"].width = 15
+    ws.column_dimensions["C"].width = 18
+    ws.column_dimensions["D"].width = 45
+    ws.column_dimensions["E"].width = 30
+    ws.column_dimensions["F"].width = 20
+    ws.column_dimensions["G"].width = 10
+    ws.column_dimensions["H"].width = 15
+    ws.column_dimensions["I"].width = 15
+    ws.column_dimensions["J"].width = 18
+    ws.column_dimensions["K"].width = 30
+
+    output = BytesIO()
+    wb.save(output)
+    output.seek(0)
+    return output

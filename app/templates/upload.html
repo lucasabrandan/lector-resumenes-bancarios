@@ -5,16 +5,16 @@
 {% block content %}
 <div class="page-header">
     <h1>Subir extracto bancario</h1>
-    <p class="subtitle">Arrastra o selecciona un PDF del Banco Supervielle</p>
+    <p class="subtitle">Arrastra o selecciona un PDF del Banco Supervielle o MercadoPago</p>
 </div>
 
 <div class="card">
     {% if error %}
-    <div class="alert alert-error">{{ error }}</div>
+    <div class="alert alert-error" data-toast>{{ error }}</div>
     {% endif %}
 
     {% if exito %}
-    <div class="alert alert-success">{{ exito }}</div>
+    <div class="alert alert-success" data-toast>{{ exito }}</div>
     {% endif %}
 
     <form method="post" enctype="multipart/form-data" action="/upload" id="uploadForm">
@@ -60,6 +60,56 @@
     </div>
 </div>
 
+{% if resumen_mp %}
+<div class="card">
+    <h2>Resumen MercadoPago</h2>
+    {% if resumen_mp.titular %}
+    <p style="margin-bottom:0.5rem;"><strong>Titular:</strong> {{ resumen_mp.titular }}</p>
+    {% endif %}
+    {% if resumen_mp.periodo %}
+    <p style="margin-bottom:0.5rem;"><strong>Periodo:</strong> {{ resumen_mp.periodo }}</p>
+    {% endif %}
+    {% if resumen_mp.cvu %}
+    <p style="margin-bottom:0.5rem;"><strong>CVU:</strong> {{ resumen_mp.cvu }}</p>
+    {% endif %}
+    {% if resumen_mp.cuit %}
+    <p style="margin-bottom:1rem;"><strong>CUIT/CUIL:</strong> {{ resumen_mp.cuit }}</p>
+    {% endif %}
+
+    <div class="table-responsive">
+    <table>
+        <thead>
+            <tr>
+                <th>Concepto</th>
+                <th class="num">Monto</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>Saldo inicial</td>
+                <td class="num">${{ "{:,.2f}".format(resumen_mp.saldo_inicial) }}</td>
+            </tr>
+            <tr>
+                <td>Entradas</td>
+                <td class="num" style="color:var(--success, #16a34a);">${{ "{:,.2f}".format(resumen_mp.entradas) }}</td>
+            </tr>
+            <tr>
+                <td>Salidas</td>
+                <td class="num" style="color:var(--error, #dc2626);">${{ "{:,.2f}".format(resumen_mp.salidas) }}</td>
+            </tr>
+            <tr style="font-weight:700; border-top:2px solid var(--border);">
+                <td>Saldo final</td>
+                <td class="num">${{ "{:,.2f}".format(resumen_mp.saldo_final) }}</td>
+            </tr>
+        </tbody>
+    </table>
+    </div>
+    <p style="margin-top:0.75rem; font-size:0.85rem; color:var(--text-muted);">
+        {{ resumen_mp.cantidad_movimientos }} movimientos procesados — cuadre de saldo verificado.
+    </p>
+</div>
+{% endif %}
+
 {% if archivos %}
 <div class="card">
     <h2>Archivos cargados</h2>
@@ -81,7 +131,8 @@
                 <td>{{ a.fecha_min }} a {{ a.fecha_max }}</td>
                 <td style="text-align: center;">
                     <form method="post" action="/upload/eliminar" style="display:inline;"
-                          onsubmit="return confirm('Eliminar {{ a.cantidad }} movimientos de {{ a.archivo }}?');">
+                          data-confirm="Se eliminaran {{ a.cantidad }} movimientos del archivo {{ a.archivo }}. Esta accion no se puede deshacer."
+                          data-confirm-title="Eliminar archivo">
                         <input type="hidden" name="archivo" value="{{ a.archivo }}">
                         <button type="submit" class="btn btn-sm btn-danger">Eliminar</button>
                     </form>

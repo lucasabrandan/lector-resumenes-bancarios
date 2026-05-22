@@ -3,12 +3,17 @@
 {% block title %}Dashboard - Lector de Resumenes{% endblock %}
 
 {% block head %}
-{% if total_movimientos > 0 %}
+{% set puede_ver_reporte = usuario and usuario.tiene_permiso('reporte') %}
+{% if total_movimientos > 0 and puede_ver_reporte %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 {% endif %}
 {% endblock %}
 
 {% block content %}
+{% if limpiar_exito %}
+<div class="alert alert-success" data-toast>{{ limpiar_exito }}</div>
+{% endif %}
+
 {% if total_movimientos == 0 %}
 <div class="card">
     <div class="empty-state">
@@ -34,6 +39,13 @@
         {% endif %}
         {% if usuario and usuario.tiene_permiso('reporte') %}
         <a href="/reporte/descargar" class="btn btn-success"><i data-lucide="download"></i> Descargar XLSX</a>
+        {% endif %}
+        {% if usuario and usuario.tiene_permiso('upload') %}
+        <form method="post" action="/limpiar-datos" style="display:inline;"
+              data-confirm="Se eliminaran TODOS los movimientos, comprobantes y percepciones cargados. Asegurate de haber exportado lo que necesitas. Esta accion no se puede deshacer."
+              data-confirm-title="Limpiar todos los datos">
+            <button type="submit" class="btn btn-danger"><i data-lucide="trash-2"></i> Limpiar datos</button>
+        </form>
         {% endif %}
     </div>
 </div>
@@ -74,58 +86,32 @@
     {% endif %}
 </div>
 
-{# --- Month selector + charts --- #}
+{# --- Bar chart Ley 25.413 --- #}
 {% set puede_ver_reporte = usuario and usuario.tiene_permiso('reporte') %}
-<div class="card">
-    <div class="card-header">
-        <h2>Detalle por Mes</h2>
-        <div class="filter-group">
-            <select id="mesSelector" style="min-width: 180px;">
-                <option value="todos">Todos los meses</option>
-                {% if puede_ver_reporte %}
-                {% for r in reporte_ley %}
-                <option value="{{ r.anio }}-{{ '%02d' | format(r.mes) }}">{{ r.periodo }}</option>
-                {% endfor %}
-                {% endif %}
-            </select>
-        </div>
-    </div>
-    <div class="grid grid-2" style="margin-bottom: 0;">
-        {% if puede_ver_reporte %}
-        <div>
-            <h3 style="font-size: 0.9rem; color: var(--text-light); margin-bottom: 0.5rem;">Impuesto Ley 25.413</h3>
-            <div class="chart-container">
-                <canvas id="chartLey25413"></canvas>
-            </div>
-        </div>
-        {% endif %}
-        <div>
-            <h3 style="font-size: 0.9rem; color: var(--text-light); margin-bottom: 0.5rem;" id="donutTitle">Importes por tipo (todos los meses)</h3>
-            <div class="chart-container">
-                <canvas id="chartDistribucion"></canvas>
-            </div>
-        </div>
-    </div>
-</div>
-
-{# --- Detail panel (shown on donut click) --- #}
-<div class="card" id="detailPanel" style="display: none;">
-    <div class="card-header">
-        <h2 id="detailTitle">Detalle</h2>
-        <div>
-            <a id="detailLink" href="/movimientos" class="btn btn-sm btn-primary">Ver todos los movimientos &rarr;</a>
-            <button class="btn btn-sm" onclick="document.getElementById('detailPanel').style.display='none'">Cerrar</button>
-        </div>
-    </div>
-    <div id="detailContent"></div>
-</div>
-
-{# --- Reporte table --- #}
 {% if puede_ver_reporte and reporte_ley %}
 <div class="card">
     <div class="card-header">
+        <h2>Impuesto Ley 25.413 por mes</h2>
+        <div style="display:flex;align-items:center;gap:0.75rem;">
+            <span id="mesSeleccionado" class="badge" style="display:none;"></span>
+            <button id="btnVolverGeneral" class="btn btn-sm" style="display:none;" onclick="volverVistaGeneral()"><i data-lucide="arrow-left"></i> Volver</button>
+            <a href="/reporte" class="btn btn-sm">Ver detalle completo &rarr;</a>
+        </div>
+    </div>
+    <div style="display:flex;gap:1rem;flex-wrap:wrap;">
+        <div class="chart-container" style="flex:1;min-width:0;">
+            <canvas id="chartLey25413"></canvas>
+        </div>
+        <div id="detalleContainer" class="chart-container" style="flex:1;min-width:0;display:none;">
+            <canvas id="chartDetalleMes"></canvas>
+        </div>
+    </div>
+</div>
+
+{# --- Reporte table --- #}
+<div class="card">
+    <div class="card-header">
         <h2>Resumen Ley 25.413</h2>
-        <a href="/reporte" class="btn btn-sm">Ver detalle completo &rarr;</a>
     </div>
     <div class="table-responsive">
     <table>
@@ -162,41 +148,62 @@
     </table>
     </div>
 </div>
-{% endif %}
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
-    var MESES_NOMBRE = ['','Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
-    var COLORS = [
-        '#7c3aed','#2563eb','#db2777','#d97706','#16a34a',
-        '#0369a1','#dc2626','#a21caf','#059669','#ca8a04',
-        '#6366f1','#ec4899','#14b8a6','#f97316','#8b5cf6',
-        '#06b6d4','#ef4444','#10b981','#f59e0b','#3b82f6',
-        '#e11d48','#84cc16','#64748b','#475569'
-    ];
-
-    // Data from backend
     var reporteLey = [
-        {% if puede_ver_reporte %}
         {% for r in reporte_ley %}{
-            periodo: '{{ r.periodo }}',
             label: '{{ r.mes_nombre[:3] }} {{ r.anio }}',
-            key: '{{ r.anio }}-{{ '%02d' | format(r.mes) }}',
+            mesNombre: '{{ r.mes_nombre }}',
+            anio: {{ r.anio }},
+            mes: {{ r.mes }},
             debitos: {{ r.impuesto_sobre_debitos }},
             creditos: {{ r.impuesto_sobre_creditos }}
         }{% if not loop.last %},{% endif %}{% endfor %}
-        {% endif %}
     ];
 
-    var distGlobal = [{% for d in distribucion %}{tipo:'{{ d.tipo }}',cantidad:{{ d.cantidad }},total:{{ d.total }}}{% if not loop.last %},{% endif %}{% endfor %}];
-    var distMensual = {{ dist_mensual_json }};
+    var chartDetalle = null;
+    var mesActivo = -1;
 
-    var selectedMonth = 'todos';
+    var TIPO_LABELS = {
+        'COMPRA_DEBITO': 'Compras Debito',
+        'EXTRACCION_ATM': 'Extracciones ATM',
+        'TRANSFERENCIA_ENVIADA': 'Transf. Enviadas',
+        'TRANSFERENCIA_RECIBIDA': 'Transf. Recibidas',
+        'DEBIN': 'DEBIN',
+        'HOMEBANKING': 'Homebanking',
+        'CHEQUE_DEPOSITADO': 'Cheques Depositados',
+        'CHEQUE_PAGADO': 'Cheques Pagados',
+        'CHEQUE_RECHAZADO': 'Cheques Rechazados',
+        'PAGO_SERVICIO': 'Pago Servicios',
+        'PRESTAMO_DESEMBOLSO': 'Prestamo Desembolso',
+        'PRESTAMO_CUOTA': 'Prestamo Cuota',
+        'COMISION': 'Comisiones',
+        'IVA': 'IVA',
+        'PERCEPCION_IVA': 'Percepcion IVA',
+        'PERCEPCION_IIBB': 'Percepcion IIBB',
+        'PERCEPCION_GANANCIAS': 'Percepcion Ganancias',
+        'RETENCION_IVA': 'Retencion IVA',
+        'RETENCION_IIBB': 'Retencion IIBB',
+        'RETENCION_GANANCIAS': 'Retencion Ganancias',
+        'RETENCION_SUSS': 'Retencion SUSS',
+        'IMPUESTO_LEY_25413_SOBRE_DEBITOS': 'Imp. Ley 25413 Deb.',
+        'IMPUESTO_LEY_25413_SOBRE_CREDITOS': 'Imp. Ley 25413 Cred.',
+        'IMPUESTO_SELLOS': 'Imp. Sellos',
+        'INTERES': 'Intereses',
+        'DEVOLUCION': 'Devoluciones',
+        'EMBARGO': 'Embargos',
+        'OTRO': 'Otros'
+    };
 
-    {% if puede_ver_reporte %}
-    // --- Bar chart ---
+    var COLORES = [
+        '#7c3aed', '#2563eb', '#059669', '#d97706', '#dc2626',
+        '#0891b2', '#7c3aed', '#db2777', '#4f46e5', '#65a30d',
+        '#ea580c', '#0d9488', '#6366f1', '#ca8a04', '#e11d48'
+    ];
+
     var ctxBar = document.getElementById('chartLey25413').getContext('2d');
-    var barChart = new Chart(ctxBar, {
+    var chartPrincipal = new Chart(ctxBar, {
         type: 'bar',
         data: {
             labels: reporteLey.map(function(r) { return r.label; }),
@@ -204,14 +211,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 {
                     label: 'Imp. s/Debitos',
                     data: reporteLey.map(function(r) { return r.debitos; }),
-                    backgroundColor: reporteLey.map(function() { return 'rgba(124, 58, 237, 0.75)'; }),
+                    backgroundColor: 'rgba(124, 58, 237, 0.75)',
                     borderColor: 'rgba(124, 58, 237, 1)',
                     borderWidth: 1, borderRadius: 4
                 },
                 {
                     label: 'Imp. s/Creditos',
                     data: reporteLey.map(function(r) { return r.creditos; }),
-                    backgroundColor: reporteLey.map(function() { return 'rgba(37, 99, 235, 0.75)'; }),
+                    backgroundColor: 'rgba(37, 99, 235, 0.75)',
                     borderColor: 'rgba(37, 99, 235, 1)',
                     borderWidth: 1, borderRadius: 4
                 }
@@ -221,11 +228,10 @@ document.addEventListener('DOMContentLoaded', function() {
             responsive: true,
             maintainAspectRatio: false,
             interaction: { intersect: false, mode: 'index' },
-            onClick: function(e, elements) {
+            onClick: function(evt, elements) {
                 if (elements.length > 0) {
                     var idx = elements[0].index;
-                    document.getElementById('mesSelector').value = reporteLey[idx].key;
-                    document.getElementById('mesSelector').dispatchEvent(new Event('change'));
+                    cargarDetalleMes(idx);
                 }
             },
             plugins: {
@@ -235,7 +241,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     callbacks: {
                         label: function(ctx) {
                             return ctx.dataset.label + ': $' + ctx.parsed.y.toLocaleString('es-AR', {minimumFractionDigits: 2});
-                        }
+                        },
+                        footer: function() { return 'Click para ver detalle del mes'; }
                     }
                 }
             },
@@ -246,132 +253,126 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         }
     });
-    {% endif %}
 
-    // --- Donut chart ---
-    var ctxDonut = document.getElementById('chartDistribucion').getContext('2d');
-    var donutChart = new Chart(ctxDonut, {
-        type: 'doughnut',
-        data: { labels: [], datasets: [{ data: [], backgroundColor: [], borderWidth: 2, borderColor: '#fff', hoverOffset: 6 }] },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            cutout: '55%',
-            onClick: function(e, elements) {
-                if (elements.length > 0) {
-                    var idx = elements[0].index;
-                    var tipo = donutChart.data.labels[idx];
-                    var tipoRaw = donutChart.data._rawTipos[idx];
-                    var cant = donutChart.data._rawCantidades[idx];
-                    var total = donutChart.data.datasets[0].data[idx];
-                    showDetail(tipoRaw, tipo, cant, total);
-                }
+    function cargarDetalleMes(idx) {
+        var info = reporteLey[idx];
+        mesActivo = idx;
+
+        // Resaltar barra seleccionada
+        chartPrincipal.data.datasets.forEach(function(ds, i) {
+            var colors = reporteLey.map(function(_, j) {
+                var alpha = j === idx ? 1 : 0.3;
+                return i === 0
+                    ? 'rgba(124, 58, 237, ' + alpha + ')'
+                    : 'rgba(37, 99, 235, ' + alpha + ')';
+            });
+            ds.backgroundColor = colors;
+        });
+        chartPrincipal.update();
+
+        // Mostrar badge y boton volver
+        document.getElementById('mesSeleccionado').textContent = info.mesNombre + ' ' + info.anio;
+        document.getElementById('mesSeleccionado').style.display = '';
+        document.getElementById('btnVolverGeneral').style.display = '';
+        document.getElementById('detalleContainer').style.display = '';
+
+        // Fetch detalle
+        fetch('/api/dashboard/mes-detalle?anio=' + info.anio + '&mes=' + info.mes)
+            .then(function(r) { return r.json(); })
+            .then(function(data) { renderDetalle(data, info); });
+    }
+
+    function renderDetalle(data, info) {
+        if (chartDetalle) chartDetalle.destroy();
+
+        // Separar debitos y creditos, ordenar por monto
+        var debitos = data.datos.filter(function(d) { return d.signo === 'DEBITO'; })
+            .sort(function(a, b) { return b.total - a.total; });
+        var creditos = data.datos.filter(function(d) { return d.signo === 'CREDITO'; })
+            .sort(function(a, b) { return b.total - a.total; });
+
+        // Top categorias (max 10 para que se lea bien)
+        var items = debitos.concat(creditos).sort(function(a, b) { return b.total - a.total; }).slice(0, 12);
+
+        var labels = items.map(function(d) {
+            return (TIPO_LABELS[d.tipo] || d.tipo) + (d.signo === 'CREDITO' ? ' (+)' : '');
+        });
+        var valores = items.map(function(d) { return d.total; });
+        var colores = items.map(function(d, i) {
+            return d.signo === 'CREDITO'
+                ? 'rgba(5, 150, 105, 0.75)'
+                : COLORES[i % COLORES.length];
+        });
+
+        var ctx2 = document.getElementById('chartDetalleMes').getContext('2d');
+        chartDetalle = new Chart(ctx2, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Monto',
+                    data: valores,
+                    backgroundColor: colores,
+                    borderRadius: 4,
+                    borderSkipped: false
+                }]
             },
-            plugins: {
-                legend: { position: 'right', labels: { usePointStyle: true, padding: 8, font: { size: 10 }, boxWidth: 8 } },
-                tooltip: {
-                    backgroundColor: 'rgba(30,41,59,0.95)', padding: 12,
-                    callbacks: {
-                        label: function(ctx) {
-                            var total = ctx.dataset.data.reduce(function(a,b){return a+b;}, 0);
-                            var pct = ((ctx.parsed / total) * 100).toFixed(1);
-                            return '$' + ctx.parsed.toLocaleString('es-AR', {minimumFractionDigits: 2}) + ' (' + pct + '%)';
-                        },
-                        afterLabel: function(ctx) {
-                            var cant = donutChart.data._rawCantidades[ctx.dataIndex];
-                            return cant + ' movimientos';
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    title: {
+                        display: true,
+                        text: 'Desglose ' + info.mesNombre + ' ' + info.anio,
+                        font: { size: 14, weight: '600' },
+                        padding: { bottom: 12 }
+                    },
+                    legend: { display: false },
+                    tooltip: {
+                        backgroundColor: 'rgba(30,41,59,0.95)', padding: 12,
+                        callbacks: {
+                            label: function(ctx) {
+                                var d = items[ctx.dataIndex];
+                                return '$' + ctx.parsed.x.toLocaleString('es-AR', {minimumFractionDigits: 2}) + ' (' + d.cantidad + ' mov.)';
+                            }
                         }
+                    }
+                },
+                scales: {
+                    x: {
+                        beginAtZero: true,
+                        grid: { color: 'rgba(0,0,0,0.05)' },
+                        ticks: { callback: function(v) { return '$' + (v/1000).toFixed(0) + 'k'; } }
+                    },
+                    y: {
+                        grid: { display: false },
+                        ticks: { font: { size: 11 } }
                     }
                 }
             }
-        }
-    });
+        });
 
-    function updateDonut(data, title) {
-        var labels = data.map(function(d) { return d.tipo.replace(/_/g, ' '); });
-        var cantidades = data.map(function(d) { return d.cantidad; });
-        var totals = data.map(function(d) { return d.total; });
-        var rawTipos = data.map(function(d) { return d.tipo; });
-
-        donutChart.data.labels = labels;
-        donutChart.data.datasets[0].data = totals;
-        donutChart.data.datasets[0].backgroundColor = COLORS.slice(0, labels.length);
-        donutChart.data._rawTipos = rawTipos;
-        donutChart.data._rawCantidades = cantidades;
-        donutChart.update();
-        document.getElementById('donutTitle').textContent = title;
+        if (typeof lucide !== 'undefined') lucide.createIcons();
     }
 
-    function highlightBar(monthKey) {
-        if (typeof barChart === 'undefined') return;
-        var ds0bg = [], ds1bg = [];
-        for (var i = 0; i < reporteLey.length; i++) {
-            if (monthKey === 'todos' || reporteLey[i].key === monthKey) {
-                ds0bg.push('rgba(124, 58, 237, 0.85)');
-                ds1bg.push('rgba(37, 99, 235, 0.85)');
-            } else {
-                ds0bg.push('rgba(124, 58, 237, 0.2)');
-                ds1bg.push('rgba(37, 99, 235, 0.2)');
-            }
-        }
-        barChart.data.datasets[0].backgroundColor = ds0bg;
-        barChart.data.datasets[1].backgroundColor = ds1bg;
-        barChart.update();
-    }
+    window.volverVistaGeneral = function() {
+        mesActivo = -1;
+        // Restaurar colores originales
+        chartPrincipal.data.datasets[0].backgroundColor = 'rgba(124, 58, 237, 0.75)';
+        chartPrincipal.data.datasets[1].backgroundColor = 'rgba(37, 99, 235, 0.75)';
+        chartPrincipal.update();
 
-    function showDetail(tipoRaw, tipoLabel, cantidad, total) {
-        var panel = document.getElementById('detailPanel');
-        var title = document.getElementById('detailTitle');
-        var content = document.getElementById('detailContent');
-        var link = document.getElementById('detailLink');
+        document.getElementById('mesSeleccionado').style.display = 'none';
+        document.getElementById('btnVolverGeneral').style.display = 'none';
+        document.getElementById('detalleContainer').style.display = 'none';
 
-        var mesLabel = selectedMonth === 'todos' ? 'todos los meses' : document.getElementById('mesSelector').selectedOptions[0].text;
-        title.textContent = tipoLabel + ' — ' + mesLabel;
+        if (chartDetalle) { chartDetalle.destroy(); chartDetalle = null; }
+    };
 
-        var url = '/movimientos?tipo=' + tipoRaw;
-        if (selectedMonth !== 'todos') {
-            var parts = selectedMonth.split('-');
-            var y = parseInt(parts[0]);
-            var m = parseInt(parts[1]);
-            var lastDay = new Date(y, m, 0).getDate();
-            url += '&fecha_desde=' + selectedMonth + '-01';
-            url += '&fecha_hasta=' + selectedMonth + '-' + (lastDay < 10 ? '0' : '') + lastDay;
-        }
-        link.href = url;
-
-        content.innerHTML = '<div style="display:flex;gap:2rem;padding:0.5rem 0;">' +
-            '<div><span style="font-size:1.5rem;font-weight:700;">' + cantidad.toLocaleString() + '</span>' +
-            '<div style="font-size:0.8rem;color:var(--text-light);text-transform:uppercase;">Movimientos</div></div>' +
-            '<div><span style="font-size:1.5rem;font-weight:700;">$' + total.toLocaleString('es-AR', {minimumFractionDigits: 2}) + '</span>' +
-            '<div style="font-size:0.8rem;color:var(--text-light);text-transform:uppercase;">Importe total</div></div>' +
-            '</div>';
-
-        panel.style.display = 'block';
-        panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }
-
-    // Month selector handler
-    document.getElementById('mesSelector').addEventListener('change', function() {
-        selectedMonth = this.value;
-        document.getElementById('detailPanel').style.display = 'none';
-
-        if (selectedMonth === 'todos') {
-            updateDonut(distGlobal, 'Importes por tipo (todos los meses)');
-        } else {
-            var data = distMensual[selectedMonth] || [];
-            var parts = selectedMonth.split('-');
-            var mesNombre = MESES_NOMBRE[parseInt(parts[1])] + ' ' + parts[0];
-            updateDonut(data, 'Importes por tipo — ' + mesNombre);
-        }
-        highlightBar(selectedMonth);
-    });
-
-    // Initial render
-    updateDonut(distGlobal, 'Importes por tipo (todos los meses)');
-
-    // Re-init Lucide icons for this page
     if (typeof lucide !== 'undefined') lucide.createIcons();
 });
 </script>
+{% endif %}
 {% endif %}
 {% endblock %}

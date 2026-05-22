@@ -4,14 +4,11 @@ Rutas HTML server-rendered con Jinja2 + HTMX.
 Estas son las páginas que ve la contadora en el navegador.
 """
 
-import json
 import logging
 from pathlib import Path
 
-from markupsafe import Markup
-
 from fastapi import APIRouter, Depends, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
@@ -23,11 +20,12 @@ from app.services.movimientos import (
     contar_movimientos,
     contar_movimientos_filtrados,
     obtener_cuentas,
-    distribucion_por_tipo,
-    distribucion_mensual,
     archivo_ya_cargado,
     eliminar_por_archivo,
+    limpiar_todos_los_datos,
     listar_archivos_cargados,
+    exportar_movimientos_xlsx,
+    resumen_mercadopago,
 )
 from app.services.usuarios import (
     listar_usuarios,
@@ -46,7 +44,6 @@ from app.services.clientes import (
     eliminar_cliente,
     asignar_usuarios,
     ids_clientes_de_usuario,
-    ids_clientes_no_monotributo,
 )
 from app.reports.ley_25413 import generar_reporte_ley_25413, resumen_general, exportar_reporte_xlsx
 from app.reports.percepciones import generar_reporte_percepciones, resumen_totales, exportar_percepciones_xlsx
@@ -59,6 +56,7 @@ from app.services.comprobantes import (
 )
 from app.parsers.arca_comprobantes import parsear_archivo
 from app.parsers.supervielle_pdf import ParserError, ErrorValidacionSaldo
+from app.parsers.mercadopago_pdf import ParserMercadoPagoError, ErrorCuadreMercadoPago
 from app.parsers.sircreb import parsear_sircreb
 from app.services.sircreb import (
     guardar_percepciones_iibb,
@@ -99,16 +97,69 @@ def _get_cliente_ids(request: Request, db: Session) -> list[int] | None:
 async def dashboard(request: Request, db: Session = Depends(get_db)):
     cids = _get_cliente_ids(request, db)
     total = contar_movimientos(db, cliente_ids=cids)
-    context = _ctx(request, total_movimientos=total, distribucion=[])
+    context = _ctx(request, total_movimientos=total)
 
     if total > 0:
         context["resumen"] = resumen_general(db, cliente_ids=cids)
-        cids_no_mono = ids_clientes_no_monotributo(db, cliente_ids=cids)
-        context["reporte_ley"] = generar_reporte_ley_25413(db, cliente_ids=cids_no_mono)
-        context["distribucion"] = distribucion_por_tipo(db, cliente_ids=cids)
-        context["dist_mensual_json"] = Markup(json.dumps(distribucion_mensual(db, cliente_ids=cids)))
+        context["reporte_ley"] = generar_reporte_ley_25413(db, cliente_ids=cids)
 
     return templates.TemplateResponse("dashboard.html", context)
+
+
+@router.post("/limpiar-datos")
+async def limpiar_datos(request: Request, db: Session = Depends(get_db)):
+    cids = _get_cliente_ids(request, db)
+    resultado = limpiar_todos_los_datos(db, cliente_ids=cids)
+    total = sum(resultado.values())
+    partes = []
+    if resultado["movimientos"]:
+        partes.append(f"{resultado['movimientos']:,} movimientos")
+    if resultado["comprobantes"]:
+        partes.append(f"{resultado['comprobantes']:,} comprobantes")
+    if resultado["percepciones_iibb"]:
+        partes.append(f"{resultado['percepciones_iibb']:,} percepciones IIBB")
+    if partes:
+        msg = f"Se eliminaron {', '.join(partes)}."
+    else:
+        msg = "No habia datos para eliminar."
+    context = _ctx(request, total_movimientos=0, limpiar_exito=msg)
+    return templates.TemplateResponse("dashboard.html", context)
+
+
+# --------------------------------------------------------------------------
+# Detalle mensual para dashboard (JSON)
+# --------------------------------------------------------------------------
+
+@router.get("/api/dashboard/mes-detalle")
+async def mes_detalle(request: Request, anio: int, mes: int, db: Session = Depends(get_db)):
+    """Devuelve desglose de movimientos por tipo para un mes específico."""
+    from sqlalchemy import func, extract
+    from app.db.models import MovimientoDB
+    from app.services.movimientos import _aplicar_filtro_clientes
+
+    cids = _get_cliente_ids(request, db)
+    query = (
+        db.query(
+            MovimientoDB.tipo,
+            MovimientoDB.signo,
+            func.sum(MovimientoDB.importe).label("total"),
+            func.count(MovimientoDB.id).label("cantidad"),
+        )
+        .filter(
+            extract("year", MovimientoDB.fecha) == anio,
+            extract("month", MovimientoDB.fecha) == mes,
+        )
+        .group_by(MovimientoDB.tipo, MovimientoDB.signo)
+        .order_by(func.sum(MovimientoDB.importe).desc())
+    )
+    query = _aplicar_filtro_clientes(query, cids)
+    rows = query.all()
+
+    datos = [
+        {"tipo": r.tipo, "signo": r.signo, "total": float(r.total), "cantidad": r.cantidad}
+        for r in rows
+    ]
+    return JSONResponse({"anio": anio, "mes": mes, "datos": datos})
 
 
 # --------------------------------------------------------------------------
@@ -169,11 +220,21 @@ async def upload_pdf(
     tmp_path.write_bytes(contenido)
 
     try:
-        cantidad = procesar_pdf(tmp_path, db, cliente_id=cliente_id)
+        cantidad, resumen_mp = procesar_pdf(tmp_path, db, cliente_id=cliente_id)
         ctx["archivos"] = listar_archivos_cargados(db, cliente_ids=cids)
         cliente = obtener_cliente_por_id(cliente_id, db)
         nombre_cliente = cliente.nombre if cliente else "?"
         ctx["exito"] = f"Se procesaron {cantidad:,} movimientos del archivo '{archivo.filename}' para el cliente '{nombre_cliente}'."
+        if resumen_mp:
+            ctx["resumen_mp"] = resumen_mp
+        return templates.TemplateResponse("upload.html", ctx)
+    except ErrorCuadreMercadoPago as e:
+        logger.error("Cuadre MercadoPago en '%s': %s", archivo.filename, e)
+        ctx["error"] = (
+            f"El archivo '{archivo.filename}' tiene una inconsistencia de saldo. "
+            f"Los movimientos no cuadran con los totales del encabezado. "
+            f"Diferencia: ${e.diferencia:,.2f}"
+        )
         return templates.TemplateResponse("upload.html", ctx)
     except ErrorValidacionSaldo as e:
         logger.error("Inconsistencia de saldo en '%s': %s", archivo.filename, e)
@@ -184,11 +245,18 @@ async def upload_pdf(
             f"Revisa que el PDF este completo y no tenga paginas faltantes."
         )
         return templates.TemplateResponse("upload.html", ctx)
+    except ParserMercadoPagoError as e:
+        logger.error("Error de parser MercadoPago en '%s': %s", archivo.filename, e)
+        ctx["error"] = (
+            f"Error al leer el PDF de MercadoPago '{archivo.filename}'. "
+            f"Detalle: {e}"
+        )
+        return templates.TemplateResponse("upload.html", ctx)
     except ValueError as e:
         logger.warning("PDF no reconocido '%s': %s", archivo.filename, e)
         ctx["error"] = (
             f"No se pudo procesar '{archivo.filename}'. "
-            f"Verifica que sea un extracto de cuenta corriente del Banco Supervielle. "
+            f"Verifica que sea un extracto de Banco Supervielle o MercadoPago. "
             f"Detalle: {e}"
         )
         return templates.TemplateResponse("upload.html", ctx)
@@ -280,6 +348,33 @@ async def movimientos_page(
     ))
 
 
+@router.get("/movimientos/descargar")
+async def descargar_movimientos(
+    request: Request,
+    tipo: str | None = None,
+    buscar: str | None = None,
+    fecha_desde: str | None = None,
+    fecha_hasta: str | None = None,
+    db: Session = Depends(get_db),
+):
+    from datetime import date as date_type
+
+    fd = date_type.fromisoformat(fecha_desde) if fecha_desde else None
+    fh = date_type.fromisoformat(fecha_hasta) if fecha_hasta else None
+
+    cids = _get_cliente_ids(request, db)
+    movimientos = listar_movimientos(
+        db, tipo=tipo, buscar=buscar, fecha_desde=fd, fecha_hasta=fh,
+        limite=100_000, offset=0, cliente_ids=cids,
+    )
+    xlsx = exportar_movimientos_xlsx(movimientos)
+    return StreamingResponse(
+        xlsx,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=movimientos.xlsx"},
+    )
+
+
 # --------------------------------------------------------------------------
 # Reporte Ley 25.413
 # --------------------------------------------------------------------------
@@ -287,16 +382,14 @@ async def movimientos_page(
 @router.get("/reporte", response_class=HTMLResponse)
 async def reporte_page(request: Request, db: Session = Depends(get_db)):
     cids = _get_cliente_ids(request, db)
-    cids_no_mono = ids_clientes_no_monotributo(db, cliente_ids=cids)
-    reporte = generar_reporte_ley_25413(db, cliente_ids=cids_no_mono)
+    reporte = generar_reporte_ley_25413(db, cliente_ids=cids)
     return templates.TemplateResponse("reporte.html", _ctx(request, reporte=reporte))
 
 
 @router.get("/reporte/descargar")
 async def descargar_reporte(request: Request, db: Session = Depends(get_db)):
     cids = _get_cliente_ids(request, db)
-    cids_no_mono = ids_clientes_no_monotributo(db, cliente_ids=cids)
-    reporte = generar_reporte_ley_25413(db, cliente_ids=cids_no_mono)
+    reporte = generar_reporte_ley_25413(db, cliente_ids=cids)
     xlsx = exportar_reporte_xlsx(reporte)
     return StreamingResponse(
         xlsx,
@@ -312,8 +405,7 @@ async def descargar_reporte(request: Request, db: Session = Depends(get_db)):
 @router.get("/percepciones", response_class=HTMLResponse)
 async def percepciones_page(request: Request, db: Session = Depends(get_db)):
     cids = _get_cliente_ids(request, db)
-    cids_no_mono = ids_clientes_no_monotributo(db, cliente_ids=cids)
-    reporte = generar_reporte_percepciones(db, cliente_ids=cids_no_mono)
+    reporte = generar_reporte_percepciones(db, cliente_ids=cids)
     totales = resumen_totales(reporte)
     return templates.TemplateResponse("percepciones.html", _ctx(
         request, reporte=reporte, totales=totales))
@@ -322,8 +414,7 @@ async def percepciones_page(request: Request, db: Session = Depends(get_db)):
 @router.get("/percepciones/descargar")
 async def descargar_percepciones(request: Request, db: Session = Depends(get_db)):
     cids = _get_cliente_ids(request, db)
-    cids_no_mono = ids_clientes_no_monotributo(db, cliente_ids=cids)
-    reporte = generar_reporte_percepciones(db, cliente_ids=cids_no_mono)
+    reporte = generar_reporte_percepciones(db, cliente_ids=cids)
     xlsx = exportar_percepciones_xlsx(reporte)
     return StreamingResponse(
         xlsx,
@@ -446,6 +537,17 @@ async def sircreb_descargar(request: Request, db: Session = Depends(get_db)):
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": "attachment; filename=sircreb_iibb.xlsx"},
     )
+
+
+# --------------------------------------------------------------------------
+# Panel MercadoPago
+# --------------------------------------------------------------------------
+
+@router.get("/mercadopago", response_class=HTMLResponse)
+async def mercadopago_page(request: Request, db: Session = Depends(get_db)):
+    cids = _get_cliente_ids(request, db)
+    resumen = resumen_mercadopago(db, cliente_ids=cids)
+    return templates.TemplateResponse("mercadopago.html", _ctx(request, resumen=resumen))
 
 
 # --------------------------------------------------------------------------
