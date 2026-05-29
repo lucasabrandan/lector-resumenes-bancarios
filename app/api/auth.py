@@ -37,7 +37,6 @@ PERMISOS_RUTA: dict[str, str] = {
     "/conceptos/descargar": "movimientos",
     "/sircreb": "sircreb",
     "/sircreb/descargar": "sircreb",
-    "/clientes": "clientes",
     "/monotributo": "monotributo",
     "/usuarios": "usuarios",
 }
@@ -46,7 +45,6 @@ PERMISOS_RUTA: dict[str, str] = {
 PERMISOS_PREFIJO: dict[str, str] = {
     "/monotributo": "monotributo",
     "/sircreb": "sircreb",
-    "/clientes": "clientes",
     "/usuarios": "usuarios",
 }
 

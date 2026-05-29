@@ -14,14 +14,12 @@ from app.parsers.sircreb import PercepcionIIBB, JURISDICCIONES
 
 def guardar_percepciones_iibb(
     percepciones: list[PercepcionIIBB],
-    cliente_id: int,
     archivo_origen: str,
     db: Session,
 ) -> int:
     """Persiste percepciones/retenciones IIBB parseadas. Retorna cantidad."""
     for p in percepciones:
         db.add(PercepcionIIBBDB(
-            cliente_id=cliente_id,
             jurisdiccion=p.jurisdiccion,
             jurisdiccion_nombre=p.jurisdiccion_nombre,
             cuit_agente=p.cuit_agente,
@@ -40,52 +38,42 @@ def guardar_percepciones_iibb(
     return len(percepciones)
 
 
-def archivo_sircreb_ya_cargado(nombre_archivo: str, cliente_id: int, db: Session) -> int:
-    """Retorna cantidad de registros ya cargados de ese archivo para ese cliente."""
+def archivo_sircreb_ya_cargado(nombre_archivo: str, db: Session) -> int:
+    """Retorna cantidad de registros ya cargados de ese archivo."""
     return (
         db.query(PercepcionIIBBDB)
-        .filter(
-            PercepcionIIBBDB.archivo_origen == nombre_archivo,
-            PercepcionIIBBDB.cliente_id == cliente_id,
-        )
+        .filter(PercepcionIIBBDB.archivo_origen == nombre_archivo)
         .count()
     )
 
 
-def eliminar_sircreb_por_archivo(nombre_archivo: str, cliente_id: int, db: Session) -> int:
+def eliminar_sircreb_por_archivo(nombre_archivo: str, db: Session) -> int:
     """Elimina registros de un archivo. Retorna cantidad eliminada."""
     count = (
         db.query(PercepcionIIBBDB)
-        .filter(
-            PercepcionIIBBDB.archivo_origen == nombre_archivo,
-            PercepcionIIBBDB.cliente_id == cliente_id,
-        )
+        .filter(PercepcionIIBBDB.archivo_origen == nombre_archivo)
         .delete()
     )
     db.commit()
     return count
 
 
-def listar_archivos_sircreb(db: Session, cliente_ids: list[int] | None = None) -> list[dict]:
+def listar_archivos_sircreb(db: Session) -> list[dict]:
     """Lista archivos SIRCREB cargados con resumen."""
     query = (
         db.query(
             PercepcionIIBBDB.archivo_origen,
-            PercepcionIIBBDB.cliente_id,
             func.count(PercepcionIIBBDB.id).label("cantidad"),
             func.min(PercepcionIIBBDB.fecha).label("fecha_desde"),
             func.max(PercepcionIIBBDB.fecha).label("fecha_hasta"),
             func.sum(PercepcionIIBBDB.monto_retenido).label("total"),
         )
-        .group_by(PercepcionIIBBDB.archivo_origen, PercepcionIIBBDB.cliente_id)
+        .group_by(PercepcionIIBBDB.archivo_origen)
     )
-    if cliente_ids is not None:
-        query = query.filter(PercepcionIIBBDB.cliente_id.in_(cliente_ids))
 
     return [
         {
             "archivo": r.archivo_origen,
-            "cliente_id": r.cliente_id,
             "cantidad": r.cantidad,
             "fecha_desde": r.fecha_desde,
             "fecha_hasta": r.fecha_hasta,
@@ -145,9 +133,7 @@ class ResumenMensualSircreb:
         return f"{MESES[self.mes]} {self.anio}"
 
 
-def generar_reporte_sircreb(
-    db: Session, cliente_ids: list[int] | None = None
-) -> list[ResumenMensualSircreb]:
+def generar_reporte_sircreb(db: Session) -> list[ResumenMensualSircreb]:
     """Genera reporte mensual de percepciones/retenciones IIBB por jurisdicción."""
     query = (
         db.query(
@@ -160,8 +146,6 @@ def generar_reporte_sircreb(
             func.coalesce(func.sum(PercepcionIIBBDB.monto_retenido), 0).label("total"),
         )
     )
-    if cliente_ids is not None:
-        query = query.filter(PercepcionIIBBDB.cliente_id.in_(cliente_ids))
 
     rows = (
         query

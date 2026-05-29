@@ -59,14 +59,12 @@ class TotalMensualLey25413:
         return f"{self.mes_nombre} {self.anio}"
 
 
-def generar_reporte_ley_25413(db: Session, cliente_ids: list[int] | None = None) -> list[TotalMensualLey25413]:
+def generar_reporte_ley_25413(db: Session) -> list[TotalMensualLey25413]:
     """Genera el reporte mensual de Ley 25.413 con devoluciones.
 
     Returns:
         Lista ordenada cronológicamente con los totales por mes.
     """
-    from app.services.movimientos import _aplicar_filtro_clientes
-
     query = (
         db.query(
             extract("year", MovimientoDB.fecha).label("anio"),
@@ -111,7 +109,6 @@ def generar_reporte_ley_25413(db: Session, cliente_ids: list[int] | None = None)
             ])
         )
     )
-    query = _aplicar_filtro_clientes(query, cliente_ids)
     rows = (
         query
         .group_by("anio", "mes")
@@ -131,22 +128,22 @@ def generar_reporte_ley_25413(db: Session, cliente_ids: list[int] | None = None)
     ]
 
 
-def resumen_general(db: Session, cliente_ids: list[int] | None = None) -> dict:
+def resumen_general(db: Session) -> dict:
     """Estadísticas generales para el dashboard."""
-    from app.services.movimientos import contar_movimientos, obtener_rango_fechas, _aplicar_filtro_clientes
+    from app.services.movimientos import contar_movimientos, obtener_rango_fechas
 
-    total_movs = contar_movimientos(db, cliente_ids=cliente_ids)
+    total_movs = contar_movimientos(db)
     fecha_min, fecha_max = obtener_rango_fechas(db)
 
-    query = (
+    totales_signo = (
         db.query(
             MovimientoDB.signo,
             func.sum(MovimientoDB.importe).label("total"),
             func.count(MovimientoDB.id).label("cantidad"),
         )
+        .group_by(MovimientoDB.signo)
+        .all()
     )
-    query = _aplicar_filtro_clientes(query, cliente_ids)
-    totales_signo = query.group_by(MovimientoDB.signo).all()
 
     debitos = next((r for r in totales_signo if r.signo == "DEBITO"), None)
     creditos = next((r for r in totales_signo if r.signo == "CREDITO"), None)

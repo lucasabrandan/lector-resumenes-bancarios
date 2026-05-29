@@ -73,11 +73,6 @@
                 {% endif %}
 
                 <div class="sidebar-section">Admin</div>
-                {% if usuario and usuario.tiene_permiso('clientes') %}
-                <a href="/clientes" class="sidebar-link {{ 'active' if '/clientes' in request.url.path else '' }}">
-                    <i data-lucide="users"></i> Clientes
-                </a>
-                {% endif %}
                 {% if usuario and usuario.tiene_permiso('usuarios') %}
                 <a href="/usuarios" class="sidebar-link {{ 'active' if '/usuarios' in request.url.path else '' }}">
                     <i data-lucide="shield"></i> Usuarios
@@ -186,12 +181,6 @@
             </div>
             <div class="more-sheet-section-label">Administracion</div>
             <div class="more-sheet-grid">
-                {% if usuario and usuario.tiene_permiso('clientes') %}
-                <a href="/clientes" class="more-sheet-item {{ 'active' if '/clientes' in request.url.path else '' }}">
-                    <i data-lucide="users"></i>
-                    Clientes
-                </a>
-                {% endif %}
                 {% if usuario and usuario.tiene_permiso('usuarios') %}
                 <a href="/usuarios" class="more-sheet-item {{ 'active' if '/usuarios' in request.url.path else '' }}">
                     <i data-lucide="shield"></i>

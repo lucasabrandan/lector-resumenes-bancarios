@@ -34,9 +34,7 @@ def archivo_ya_cargado(nombre_archivo: str, db: Session) -> int:
     )
 
 
-def procesar_pdf(
-    ruta_pdf: Path, db: Session, cliente_id: int | None = None
-) -> tuple[int, ResumenMP | None]:
+def procesar_pdf(ruta_pdf: Path, db: Session) -> tuple[int, ResumenMP | None]:
     """Parsea un PDF bancario y guarda los movimientos en la DB.
 
     Auto-detecta si es MercadoPago o Supervielle.
@@ -61,7 +59,6 @@ def procesar_pdf(
             cuenta=m.cuenta,
             archivo_origen=nombre_archivo,
             pagina_origen=m.pagina_origen,
-            cliente_id=cliente_id,
             fecha=m.fecha,
             concepto=m.concepto,
             detalle_adicional=m.detalle_adicional,
@@ -79,32 +76,12 @@ def procesar_pdf(
     return len(registros), resumen_mp
 
 
-def limpiar_todos_los_datos(db: Session, cliente_ids: list[int] | None = None) -> dict[str, int]:
-    """Elimina todos los movimientos, comprobantes y percepciones IIBB.
-
-    Si cliente_ids es None (admin), borra todo. Si no, solo los del usuario.
-    Devuelve dict con cantidades eliminadas por tabla.
-    """
+def limpiar_todos_los_datos(db: Session) -> dict[str, int]:
+    """Elimina todos los movimientos, comprobantes y percepciones IIBB."""
     resultado = {}
-
-    # Movimientos
-    q = db.query(MovimientoDB)
-    if cliente_ids is not None:
-        q = q.filter(MovimientoDB.cliente_id.in_(cliente_ids))
-    resultado["movimientos"] = q.delete(synchronize_session=False)
-
-    # Comprobantes
-    q = db.query(ComprobanteDB)
-    if cliente_ids is not None:
-        q = q.filter(ComprobanteDB.cliente_id.in_(cliente_ids))
-    resultado["comprobantes"] = q.delete(synchronize_session=False)
-
-    # Percepciones IIBB
-    q = db.query(PercepcionIIBBDB)
-    if cliente_ids is not None:
-        q = q.filter(PercepcionIIBBDB.cliente_id.in_(cliente_ids))
-    resultado["percepciones_iibb"] = q.delete(synchronize_session=False)
-
+    resultado["movimientos"] = db.query(MovimientoDB).delete(synchronize_session=False)
+    resultado["comprobantes"] = db.query(ComprobanteDB).delete(synchronize_session=False)
+    resultado["percepciones_iibb"] = db.query(PercepcionIIBBDB).delete(synchronize_session=False)
     db.commit()
     return resultado
 
@@ -120,40 +97,28 @@ def eliminar_por_archivo(nombre_archivo: str, db: Session) -> int:
     return cantidad
 
 
-def listar_archivos_cargados(db: Session, cliente_ids: list[int] | None = None) -> list[dict]:
-    """Lista archivos procesados con stats. Si cliente_ids es None, muestra todos."""
-    query = db.query(
-        MovimientoDB.archivo_origen,
-        MovimientoDB.cliente_id,
-        func.count(MovimientoDB.id).label("cantidad"),
-        func.min(MovimientoDB.fecha).label("fecha_min"),
-        func.max(MovimientoDB.fecha).label("fecha_max"),
-    )
-    if cliente_ids is not None:
-        query = query.filter(MovimientoDB.cliente_id.in_(cliente_ids))
+def listar_archivos_cargados(db: Session) -> list[dict]:
+    """Lista archivos procesados con stats."""
     rows = (
-        query
-        .group_by(MovimientoDB.archivo_origen, MovimientoDB.cliente_id)
+        db.query(
+            MovimientoDB.archivo_origen,
+            func.count(MovimientoDB.id).label("cantidad"),
+            func.min(MovimientoDB.fecha).label("fecha_min"),
+            func.max(MovimientoDB.fecha).label("fecha_max"),
+        )
+        .group_by(MovimientoDB.archivo_origen)
         .order_by(MovimientoDB.archivo_origen)
         .all()
     )
     return [
         {
             "archivo": r.archivo_origen,
-            "cliente_id": r.cliente_id,
             "cantidad": r.cantidad,
             "fecha_min": r.fecha_min,
             "fecha_max": r.fecha_max,
         }
         for r in rows
     ]
-
-
-def _aplicar_filtro_clientes(query, cliente_ids: list[int] | None):
-    """Aplica filtro por cliente_ids. None = sin filtro (admin)."""
-    if cliente_ids is not None:
-        query = query.filter(MovimientoDB.cliente_id.in_(cliente_ids))
-    return query
 
 
 def listar_movimientos(
@@ -165,11 +130,9 @@ def listar_movimientos(
     buscar: str | None = None,
     limite: int = 100,
     offset: int = 0,
-    cliente_ids: list[int] | None = None,
 ) -> list[MovimientoDB]:
     """Consulta movimientos con filtros opcionales."""
     query = db.query(MovimientoDB)
-    query = _aplicar_filtro_clientes(query, cliente_ids)
 
     if cuenta:
         query = query.filter(MovimientoDB.cuenta == cuenta)
@@ -191,11 +154,9 @@ def contar_movimientos_filtrados(
     fecha_desde: date | None = None,
     fecha_hasta: date | None = None,
     buscar: str | None = None,
-    cliente_ids: list[int] | None = None,
 ) -> int:
     """Total de movimientos con filtros aplicados."""
     query = db.query(func.count(MovimientoDB.id))
-    query = _aplicar_filtro_clientes(query, cliente_ids)
     if tipo:
         query = query.filter(MovimientoDB.tipo == tipo)
     if fecha_desde:
@@ -207,11 +168,9 @@ def contar_movimientos_filtrados(
     return query.scalar() or 0
 
 
-def contar_movimientos(db: Session, cliente_ids: list[int] | None = None) -> int:
+def contar_movimientos(db: Session) -> int:
     """Total de movimientos en la DB."""
-    query = db.query(func.count(MovimientoDB.id))
-    query = _aplicar_filtro_clientes(query, cliente_ids)
-    return query.scalar() or 0
+    return db.query(func.count(MovimientoDB.id)).scalar() or 0
 
 
 def obtener_cuentas(db: Session) -> list[str]:
@@ -229,70 +188,17 @@ def obtener_rango_fechas(db: Session) -> tuple[date | None, date | None]:
     return (resultado[0], resultado[1]) if resultado else (None, None)
 
 
-def distribucion_por_tipo(db: Session, cliente_ids: list[int] | None = None) -> list[dict]:
-    """Cantidad y total por tipo de movimiento, ordenado por cantidad desc."""
-    query = db.query(
-        MovimientoDB.tipo,
-        func.count(MovimientoDB.id).label("cantidad"),
-        func.sum(MovimientoDB.importe).label("total"),
-    )
-    query = _aplicar_filtro_clientes(query, cliente_ids)
-    rows = (
-        query
-        .group_by(MovimientoDB.tipo)
-        .order_by(func.count(MovimientoDB.id).desc())
-        .all()
-    )
-    return [{"tipo": r.tipo, "cantidad": r.cantidad, "total": float(r.total)} for r in rows]
-
-
-def distribucion_mensual(db: Session, cliente_ids: list[int] | None = None) -> dict:
-    """Distribucion por tipo agrupada por mes.
-
-    Returns:
-        Dict con clave "YYYY-MM" y valor lista de {tipo, cantidad, total}.
-    """
-    query = db.query(
-        extract("year", MovimientoDB.fecha).label("anio"),
-        extract("month", MovimientoDB.fecha).label("mes"),
-        MovimientoDB.tipo,
-        func.count(MovimientoDB.id).label("cantidad"),
-        func.sum(MovimientoDB.importe).label("total"),
-    )
-    query = _aplicar_filtro_clientes(query, cliente_ids)
-    rows = (
-        query
-        .group_by("anio", "mes", MovimientoDB.tipo)
-        .order_by("anio", "mes", func.count(MovimientoDB.id).desc())
-        .all()
-    )
-
-    resultado: dict[str, list[dict]] = {}
-    for r in rows:
-        clave = f"{int(r.anio)}-{int(r.mes):02d}"
-        if clave not in resultado:
-            resultado[clave] = []
-        resultado[clave].append({
-            "tipo": r.tipo,
-            "cantidad": r.cantidad,
-            "total": float(r.total),
-        })
-    return resultado
-
-
-def resumen_mercadopago(db: Session, cliente_ids: list[int] | None = None) -> dict | None:
+def resumen_mercadopago(db: Session) -> dict | None:
     """Genera resumen de movimientos MercadoPago.
 
     Returns None si no hay movimientos MP.
     """
     base = db.query(MovimientoDB).filter(MovimientoDB.banco == "MERCADOPAGO")
-    base = _aplicar_filtro_clientes(base, cliente_ids)
 
     total = base.count()
     if total == 0:
         return None
 
-    # Totales generales
     totales = (
         db.query(
             MovimientoDB.signo,
@@ -300,9 +206,9 @@ def resumen_mercadopago(db: Session, cliente_ids: list[int] | None = None) -> di
             func.count(MovimientoDB.id).label("cantidad"),
         )
         .filter(MovimientoDB.banco == "MERCADOPAGO")
+        .group_by(MovimientoDB.signo)
+        .all()
     )
-    totales = _aplicar_filtro_clientes(totales, cliente_ids)
-    totales = totales.group_by(MovimientoDB.signo).all()
 
     entradas = 0.0
     salidas = 0.0
@@ -316,18 +222,15 @@ def resumen_mercadopago(db: Session, cliente_ids: list[int] | None = None) -> di
             salidas = float(r.total)
             cant_salidas = r.cantidad
 
-    # Rango de fechas
     fechas = (
         db.query(
             func.min(MovimientoDB.fecha).label("desde"),
             func.max(MovimientoDB.fecha).label("hasta"),
         )
         .filter(MovimientoDB.banco == "MERCADOPAGO")
+        .first()
     )
-    fechas = _aplicar_filtro_clientes(fechas, cliente_ids)
-    fechas = fechas.first()
 
-    # Distribucion por tipo
     por_tipo = (
         db.query(
             MovimientoDB.tipo,
@@ -336,16 +239,11 @@ def resumen_mercadopago(db: Session, cliente_ids: list[int] | None = None) -> di
             func.count(MovimientoDB.id).label("cantidad"),
         )
         .filter(MovimientoDB.banco == "MERCADOPAGO")
-    )
-    por_tipo = _aplicar_filtro_clientes(por_tipo, cliente_ids)
-    por_tipo = (
-        por_tipo
         .group_by(MovimientoDB.tipo, MovimientoDB.signo)
         .order_by(func.sum(MovimientoDB.importe).desc())
         .all()
     )
 
-    # Distribucion mensual
     mensual = (
         db.query(
             extract("year", MovimientoDB.fecha).label("anio"),
@@ -354,10 +252,6 @@ def resumen_mercadopago(db: Session, cliente_ids: list[int] | None = None) -> di
             func.sum(MovimientoDB.importe).label("total"),
         )
         .filter(MovimientoDB.banco == "MERCADOPAGO")
-    )
-    mensual = _aplicar_filtro_clientes(mensual, cliente_ids)
-    mensual = (
-        mensual
         .group_by("anio", "mes", MovimientoDB.signo)
         .order_by("anio", "mes")
         .all()
@@ -425,7 +319,6 @@ def exportar_movimientos_xlsx(movimientos: list[MovimientoDB]) -> BytesIO:
         for col in range(1, 12):
             ws.cell(row=i, column=col).border = thin_border
 
-    # Fila de totales
     if movimientos:
         total_row = len(movimientos) + 2
         total_font = Font(bold=True, size=11)

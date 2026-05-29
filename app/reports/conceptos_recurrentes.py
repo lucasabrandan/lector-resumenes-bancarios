@@ -18,7 +18,6 @@ from sqlalchemy import func, extract, case
 from sqlalchemy.orm import Session
 
 from app.db.models import MovimientoDB
-from app.services.movimientos import _aplicar_filtro_clientes
 
 
 @dataclass
@@ -68,7 +67,6 @@ class ReporteConceptos:
 
 def generar_reporte_conceptos(
     db: Session,
-    cliente_ids: list[int] | None = None,
     tipo: str | None = None,
     signo: str | None = None,
     buscar: str | None = None,
@@ -96,8 +94,6 @@ def generar_reporte_conceptos(
             )
         ).label("total_credito"),
     )
-
-    query = _aplicar_filtro_clientes(query, cliente_ids)
 
     if tipo:
         query = query.filter(MovimientoDB.tipo == tipo)

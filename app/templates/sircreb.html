@@ -20,30 +20,15 @@
     {% endif %}
 
     <form method="post" enctype="multipart/form-data" action="/sircreb" id="uploadForm">
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1rem;">
-            <div>
-                <label for="cliente_id" style="font-size:0.85rem; font-weight:600; display:block; margin-bottom:0.5rem;">Cliente</label>
-                {% if clientes %}
-                <select id="cliente_id" name="cliente_id" required style="width:100%; height:38px;">
-                    <option value="">-- Seleccionar cliente --</option>
-                    {% for c in clientes %}
-                    <option value="{{ c.id }}">{{ c.nombre }}{% if c.cuit %} ({{ c.cuit }}){% endif %}</option>
-                    {% endfor %}
-                </select>
-                {% else %}
-                <p style="color:var(--error); font-size:0.9rem;">No hay clientes. <a href="/clientes">Crea uno primero</a>.</p>
-                {% endif %}
-            </div>
-            <div>
-                <label for="formato" style="font-size:0.85rem; font-weight:600; display:block; margin-bottom:0.5rem;">Formato (opcional)</label>
-                <select id="formato" name="formato" style="width:100%; height:38px;">
-                    <option value="">Autodetectar</option>
-                    <option value="sircar_percepciones">SIRCAR — Percepciones (Convenio Multilateral)</option>
-                    <option value="sircar_retenciones">SIRCAR — Retenciones (Convenio Multilateral)</option>
-                    <option value="arba_percepciones">ARBA — Percepciones (Buenos Aires)</option>
-                    <option value="arba_retenciones">ARBA — Retenciones (Buenos Aires)</option>
-                </select>
-            </div>
+        <div style="margin-bottom:1rem;">
+            <label for="formato" style="font-size:0.85rem; font-weight:600; display:block; margin-bottom:0.5rem;">Formato (opcional)</label>
+            <select id="formato" name="formato" style="width:100%; max-width:400px; height:38px;">
+                <option value="">Autodetectar</option>
+                <option value="sircar_percepciones">SIRCAR — Percepciones (Convenio Multilateral)</option>
+                <option value="sircar_retenciones">SIRCAR — Retenciones (Convenio Multilateral)</option>
+                <option value="arba_percepciones">ARBA — Percepciones (Buenos Aires)</option>
+                <option value="arba_retenciones">ARBA — Retenciones (Buenos Aires)</option>
+            </select>
         </div>
 
         <div class="upload-area" id="uploadArea">
@@ -56,7 +41,7 @@
         </div>
 
         <div style="margin-top:1.25rem; text-align:center;">
-            <button type="submit" class="btn btn-primary" id="submitBtn" {% if not clientes %}disabled{% endif %}>
+            <button type="submit" class="btn btn-primary" id="submitBtn">
                 <span class="spinner"></span>
                 <span class="btn-text">Importar archivo</span>
             </button>
@@ -102,7 +87,6 @@
                           data-confirm="Se eliminaran {{ a.cantidad }} registros del archivo {{ a.archivo }}. Esta accion no se puede deshacer."
                           data-confirm-title="Eliminar archivo SIRCREB">
                         <input type="hidden" name="archivo" value="{{ a.archivo }}">
-                        <input type="hidden" name="cliente_id" value="{{ a.cliente_id }}">
                         <button type="submit" class="btn btn-sm btn-danger">Eliminar</button>
                     </form>
                 </td>

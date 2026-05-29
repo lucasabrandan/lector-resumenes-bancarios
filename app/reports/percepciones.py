@@ -102,16 +102,12 @@ class ResumenMensual:
         return f"{self.mes_nombre} {self.anio}"
 
 
-def generar_reporte_percepciones(
-    db: Session, cliente_ids: list[int] | None = None
-) -> list[ResumenMensual]:
+def generar_reporte_percepciones(db: Session) -> list[ResumenMensual]:
     """Genera el reporte mensual de percepciones y retenciones.
 
     Returns:
         Lista ordenada cronologicamente, cada elemento con sus lineas por tipo.
     """
-    from app.services.movimientos import _aplicar_filtro_clientes
-
     query = (
         db.query(
             extract("year", MovimientoDB.fecha).label("anio"),
@@ -122,7 +118,6 @@ def generar_reporte_percepciones(
         )
         .filter(MovimientoDB.tipo.in_(TIPOS_PERCEPCIONES_RETENCIONES))
     )
-    query = _aplicar_filtro_clientes(query, cliente_ids)
     rows = (
         query
         .group_by("anio", "mes", MovimientoDB.tipo)
