@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Configuracion — Lector de Resumenes{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1>Configuracion</h1>
+    <p class="subtitle">Seguridad y retencion de datos.</p>
+</div>
+
+{% if error %}
+<div class="alert alert-error" data-toast>{{ error }}</div>
+{% endif %}
+{% if exito %}
+<div class="alert alert-success" data-toast>{{ exito }}</div>
+{% endif %}
+
+<!-- Retencion de datos -->
+<div class="card">
+    <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:1rem;">
+        <div style="width:40px; height:40px; border-radius:10px; background:#fef3c7; display:flex; align-items:center; justify-content:center;">
+            <i data-lucide="timer" style="width:20px; height:20px; color:#d97706;"></i>
+        </div>
+        <div>
+            <h2 style="margin:0;">Retencion de datos</h2>
+            <p style="margin:0; font-size:0.85rem; color:var(--text-light);">
+                Los datos financieros (movimientos, comprobantes, percepciones) se eliminan automaticamente despues del tiempo configurado.
+            </p>
+        </div>
+    </div>
+
+    <form method="post" action="/configuracion">
+        <div class="filter-group" style="max-width:400px; margin-bottom:1.5rem;">
+            <label for="retencion_horas">Tiempo de retencion</label>
+            <select id="retencion_horas" name="retencion_horas" style="width:100%; height:42px; font-size:0.95rem;">
+                {% for valor, etiqueta in opciones_retencion %}
+                <option value="{{ valor }}" {{ 'selected' if config.retencion_horas == valor else '' }}>
+                    {{ etiqueta }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <div style="background:var(--bg-secondary); border-radius:8px; padding:1rem 1.25rem; margin-bottom:1.5rem;">
+            <div style="display:flex; align-items:flex-start; gap:0.75rem;">
+                <i data-lucide="info" style="width:18px; height:18px; color:var(--primary); flex-shrink:0; margin-top:2px;"></i>
+                <div style="font-size:0.85rem; color:var(--text-secondary); line-height:1.5;">
+                    {% if config.retencion_horas == 0 %}
+                        <strong>Los datos no se borran automaticamente.</strong>
+                        Solo se eliminan manualmente desde la pantalla de carga o con "Limpiar datos" del dashboard.
+                    {% else %}
+                        Los datos se borran automaticamente <strong>{{ label_retencion(config.retencion_horas) }}</strong>
+                        despues de haber sido cargados. Los archivos PDF se eliminan del disco inmediatamente despues de procesarse.
+                        <br>La verificacion se ejecuta cada 10 minutos y tambien al reiniciar el servidor.
+                    {% endif %}
+                    <br><br>
+                    <strong>Nota:</strong> Los usuarios y la configuracion NO se borran — solo los datos financieros.
+                </div>
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary">Guardar configuracion</button>
+    </form>
+</div>
+
+<!-- Info de seguridad -->
+<div class="card">
+    <div style="display:flex; align-items:center; gap:0.75rem; margin-bottom:1rem;">
+        <div style="width:40px; height:40px; border-radius:10px; background:#dcfce7; display:flex; align-items:center; justify-content:center;">
+            <i data-lucide="shield-check" style="width:20px; height:20px; color:#16a34a;"></i>
+        </div>
+        <div>
+            <h2 style="margin:0;">Politica de datos</h2>
+        </div>
+    </div>
+
+    <div style="display:grid; gap:0.75rem;">
+        <div style="display:flex; align-items:center; gap:0.75rem; padding:0.75rem; background:var(--bg-secondary); border-radius:8px;">
+            <i data-lucide="check-circle" style="width:16px; height:16px; color:var(--success); flex-shrink:0;"></i>
+            <span style="font-size:0.9rem;">Los archivos PDF se eliminan del disco inmediatamente despues de procesarse.</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:0.75rem; padding:0.75rem; background:var(--bg-secondary); border-radius:8px;">
+            <i data-lucide="check-circle" style="width:16px; height:16px; color:var(--success); flex-shrink:0;"></i>
+            <span style="font-size:0.9rem;">Los datos parseados se guardan temporalmente en la base de datos local (SQLite).</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:0.75rem; padding:0.75rem; background:var(--bg-secondary); border-radius:8px;">
+            <i data-lucide="check-circle" style="width:16px; height:16px; color:var(--success); flex-shrink:0;"></i>
+            <span style="font-size:0.9rem;">No se envian datos a servicios externos — todo se procesa localmente.</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:0.75rem; padding:0.75rem; background:var(--bg-secondary); border-radius:8px;">
+            <i data-lucide="check-circle" style="width:16px; height:16px; color:var(--success); flex-shrink:0;"></i>
+            <span style="font-size:0.9rem;">La purga automatica se ejecuta cada 10 minutos y al reiniciar el servidor.</span>
+        </div>
+    </div>
+</div>
+{% endblock %}

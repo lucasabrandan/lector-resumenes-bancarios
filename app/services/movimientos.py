@@ -173,6 +173,45 @@ def contar_movimientos(db: Session) -> int:
     return db.query(func.count(MovimientoDB.id)).scalar() or 0
 
 
+def resumen_filtrado(
+    db: Session,
+    tipo: str | None = None,
+    buscar: str | None = None,
+    fecha_desde: date | None = None,
+    fecha_hasta: date | None = None,
+) -> dict:
+    """Resumen de totales para los movimientos filtrados."""
+    query = db.query(
+        MovimientoDB.signo,
+        func.sum(MovimientoDB.importe).label("total"),
+        func.count(MovimientoDB.id).label("cantidad"),
+    )
+    if tipo:
+        query = query.filter(MovimientoDB.tipo == tipo)
+    if fecha_desde:
+        query = query.filter(MovimientoDB.fecha >= fecha_desde)
+    if fecha_hasta:
+        query = query.filter(MovimientoDB.fecha <= fecha_hasta)
+    if buscar:
+        query = query.filter(MovimientoDB.concepto.ilike(f"%{buscar}%"))
+
+    rows = query.group_by(MovimientoDB.signo).all()
+
+    debitos = 0.0
+    creditos = 0.0
+    for r in rows:
+        if r.signo == "DEBITO":
+            debitos = float(r.total)
+        else:
+            creditos = float(r.total)
+
+    return {
+        "debitos": debitos,
+        "creditos": creditos,
+        "neto": creditos - debitos,
+    }
+
+
 def obtener_cuentas(db: Session) -> list[str]:
     """Lista de cuentas únicas en la DB."""
     rows = db.query(MovimientoDB.cuenta).distinct().all()

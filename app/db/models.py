@@ -16,7 +16,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.db.base import Base
 
 
-TODOS_LOS_PERMISOS = ["dashboard", "upload", "movimientos", "reporte", "percepciones", "sircreb", "monotributo", "usuarios"]
+TODOS_LOS_PERMISOS = ["dashboard", "upload", "movimientos", "reporte", "percepciones", "sircreb", "monotributo", "usuarios", "configuracion"]
 
 
 class UsuarioDB(Base):
@@ -70,6 +70,9 @@ class MovimientoDB(Base):
     # Clasificación
     tipo: Mapped[str] = mapped_column(String(50), default="OTRO")
 
+    # Timestamp de carga (para auto-expiración)
+    creado: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
     __table_args__ = (
         Index("ix_movimientos_fecha", "fecha"),
         Index("ix_movimientos_cuenta_fecha", "cuenta", "fecha"),
@@ -103,6 +106,16 @@ class ComprobanteDB(Base):
     __table_args__ = (
         Index("ix_comprobantes_fecha", "fecha"),
     )
+
+
+class ConfiguracionDB(Base):
+    """Configuracion global del sistema (una sola fila)."""
+
+    __tablename__ = "configuracion"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    retencion_horas: Mapped[int] = mapped_column(Integer, default=24, nullable=False)
+    actualizado: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 class PercepcionIIBBDB(Base):

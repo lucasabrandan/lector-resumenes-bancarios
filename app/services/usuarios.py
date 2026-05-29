@@ -82,6 +82,7 @@ def eliminar_usuario(usuario_id: int, db: Session) -> bool:
 def crear_admin_si_no_existe(db: Session) -> None:
     """Crea el usuario admin por defecto si no hay ningun usuario."""
     if db.query(UsuarioDB).count() > 0:
+        _migrar_permisos_nuevos(db)
         return
     crear_usuario(
         username="admin",
@@ -90,3 +91,16 @@ def crear_admin_si_no_existe(db: Session) -> None:
         permisos=TODOS_LOS_PERMISOS,
         db=db,
     )
+
+
+def _migrar_permisos_nuevos(db: Session) -> None:
+    """Agrega permisos nuevos a admins existentes que no los tengan."""
+    admins = db.query(UsuarioDB).all()
+    for u in admins:
+        if not u.tiene_permiso("usuarios"):
+            continue
+        permisos_actuales = u.lista_permisos()
+        faltantes = [p for p in TODOS_LOS_PERMISOS if p not in permisos_actuales]
+        if faltantes:
+            u.permisos = ",".join(permisos_actuales + faltantes)
+    db.commit()

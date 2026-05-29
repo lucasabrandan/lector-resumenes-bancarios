@@ -2,11 +2,255 @@
 
 {% block title %}Movimientos - Lector de Resumenes{% endblock %}
 
+{% block head %}
+<style>
+    /* ===== Summary stats ===== */
+    .mov-stats {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1rem;
+        margin-bottom: 1.25rem;
+    }
+    .mov-stat {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        padding: 1rem 1.15rem;
+        box-shadow: var(--shadow-xs);
+    }
+    .mov-stat-label {
+        font-size: 0.68rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--text-muted);
+        margin-bottom: 0.3rem;
+    }
+    .mov-stat-value {
+        font-size: 1.15rem;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+    }
+    .mov-stat-deb .mov-stat-value { color: var(--error); }
+    .mov-stat-cre .mov-stat-value { color: var(--success); }
+    .mov-stat-neto .mov-stat-value {
+        color: {% if resumen and resumen.neto >= 0 %}var(--success){% else %}var(--error){% endif %};
+    }
+
+    /* ===== Active filters chips ===== */
+    .active-filters {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+        margin-bottom: 1rem;
+        font-size: 0.82rem;
+    }
+    .active-filters-label {
+        font-size: 0.72rem;
+        font-weight: 600;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+    }
+    .filter-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.3rem;
+        padding: 0.25rem 0.6rem;
+        background: var(--primary-light);
+        color: var(--primary);
+        border-radius: 99px;
+        font-size: 0.75rem;
+        font-weight: 550;
+    }
+
+    /* ===== Sticky header ===== */
+    .mov-table thead th {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background: var(--border-light);
+        box-shadow: 0 1px 0 var(--border);
+    }
+
+    /* ===== Row accent ===== */
+    .mov-table tbody tr {
+        border-left: 3px solid transparent;
+    }
+    .mov-table tbody tr.row-credito {
+        border-left-color: var(--success);
+        background: transparent;
+    }
+    .mov-table tbody tr.row-credito:hover { background: var(--credito); }
+    .mov-table tbody tr.row-debito {
+        border-left-color: var(--error);
+        background: transparent;
+    }
+    .mov-table tbody tr.row-debito:hover { background: var(--debito); }
+
+    /* ===== Signo pill ===== */
+    .signo-pill {
+        display: inline-block;
+        padding: 0.15rem 0.5rem;
+        border-radius: 99px;
+        font-size: 0.68rem;
+        font-weight: 600;
+        letter-spacing: 0.02em;
+    }
+    .signo-deb { background: var(--debito); color: var(--error); }
+    .signo-cre { background: var(--credito); color: var(--success); }
+
+    /* ===== Showing X of Y ===== */
+    .mov-range {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+    }
+    .mov-range strong { color: var(--text-secondary); }
+
+    /* ===== Pagination numbers ===== */
+    .pag {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 1.25rem;
+        gap: 1rem;
+        flex-wrap: wrap;
+    }
+    .pag-pages {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+    .pag-btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 34px;
+        height: 34px;
+        border-radius: var(--radius-xs);
+        font-size: 0.82rem;
+        font-weight: 500;
+        text-decoration: none;
+        color: var(--text-secondary);
+        border: 1px solid var(--border);
+        background: var(--card-bg);
+        transition: all var(--transition);
+    }
+    .pag-btn:hover { background: var(--border-light); }
+    .pag-btn.active {
+        background: var(--primary);
+        color: white;
+        border-color: var(--primary);
+    }
+    .pag-btn.disabled {
+        opacity: 0.4;
+        pointer-events: none;
+    }
+    .pag-ellipsis {
+        width: 34px;
+        text-align: center;
+        color: var(--text-muted);
+        font-size: 0.82rem;
+    }
+
+    /* ===== Mobile cards ===== */
+    .mov-cards { display: none; }
+
+    .mov-card-item {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        padding: 0.85rem 1rem;
+        margin-bottom: 0.5rem;
+        border-left: 3px solid var(--border);
+    }
+    .mov-card-item.card-credito { border-left-color: var(--success); }
+    .mov-card-item.card-debito { border-left-color: var(--error); }
+
+    .mov-card-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 0.5rem;
+        margin-bottom: 0.35rem;
+    }
+    .mov-card-concepto {
+        font-size: 0.85rem;
+        font-weight: 550;
+        color: var(--text);
+        flex: 1;
+        min-width: 0;
+    }
+    .mov-card-importe {
+        font-size: 0.9rem;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+    .mov-card-importe.imp-deb { color: var(--error); }
+    .mov-card-importe.imp-cre { color: var(--success); }
+
+    .mov-card-meta {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        font-size: 0.72rem;
+        color: var(--text-muted);
+    }
+    .mov-card-detail {
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        margin-top: 0.25rem;
+    }
+
+    @media (max-width: 768px) {
+        .mov-stats { grid-template-columns: repeat(2, 1fr); gap: 0.5rem; }
+        .mov-stat { padding: 0.75rem; }
+        .mov-stat-value { font-size: 0.95rem; }
+
+        .mov-table-wrap { display: none; }
+        .mov-cards { display: block; }
+
+        .pag { justify-content: center; }
+    }
+
+    @media (max-width: 480px) {
+        .mov-stats { grid-template-columns: 1fr 1fr; }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="page-header">
-    <h1>Movimientos ({{ "{:,}".format(total) }})</h1>
+    <h1>Movimientos</h1>
+    <p class="subtitle">{{ "{:,}".format(total) }} registro{{ "s" if total != 1 else "" }}{{ " encontrados" if hay_filtros else " en total" }}</p>
 </div>
 
+<!-- Stats bar -->
+{% if total > 0 %}
+<div class="mov-stats">
+    <div class="mov-stat">
+        <div class="mov-stat-label">Total movimientos</div>
+        <div class="mov-stat-value">{{ "{:,}".format(total) }}</div>
+    </div>
+    <div class="mov-stat mov-stat-deb">
+        <div class="mov-stat-label">Debitos</div>
+        <div class="mov-stat-value">${{ "{:,.2f}".format(resumen.debitos) }}</div>
+    </div>
+    <div class="mov-stat mov-stat-cre">
+        <div class="mov-stat-label">Creditos</div>
+        <div class="mov-stat-value">${{ "{:,.2f}".format(resumen.creditos) }}</div>
+    </div>
+    <div class="mov-stat mov-stat-neto">
+        <div class="mov-stat-label">Neto</div>
+        <div class="mov-stat-value">${{ "{:,.2f}".format(resumen.neto) }}</div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Filters -->
 <div class="card">
     <form method="get" action="/movimientos">
         <div class="filter-bar">
@@ -20,7 +264,7 @@
                 <select name="tipo" id="tipo">
                     <option value="">Todos</option>
                     {% for t in tipos %}
-                    <option value="{{ t }}" {{ "selected" if t == tipo_filtro else "" }}>{{ t }}</option>
+                    <option value="{{ t }}" {{ "selected" if t == tipo_filtro else "" }}>{{ t | replace("_", " ") }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -34,8 +278,10 @@
             </div>
             <div class="filter-actions">
                 <button type="submit" class="btn btn-primary btn-sm">Filtrar</button>
+                {% if hay_filtros %}
                 <a href="/movimientos" class="btn btn-sm">Limpiar</a>
-                <a href="/movimientos/descargar?{{ '&tipo=' + tipo_filtro if tipo_filtro else '' }}{{ '&buscar=' + buscar if buscar else '' }}{{ '&fecha_desde=' + fecha_desde if fecha_desde else '' }}{{ '&fecha_hasta=' + fecha_hasta if fecha_hasta else '' }}" class="btn btn-sm" title="Descargar XLSX con los filtros aplicados">
+                {% endif %}
+                <a href="/movimientos/descargar?{{ '&tipo=' + tipo_filtro if tipo_filtro else '' }}{{ '&buscar=' + buscar if buscar else '' }}{{ '&fecha_desde=' + fecha_desde if fecha_desde else '' }}{{ '&fecha_hasta=' + fecha_hasta if fecha_hasta else '' }}" class="btn btn-sm" title="Descargar XLSX">
                     <i data-lucide="download"></i> XLSX
                 </a>
             </div>
@@ -43,10 +289,30 @@
     </form>
 </div>
 
+<!-- Active filters chips -->
+{% if hay_filtros %}
+<div class="active-filters">
+    <span class="active-filters-label">Filtros activos:</span>
+    {% if buscar %}
+    <span class="filter-chip"><i data-lucide="search" style="width:12px;height:12px;"></i> "{{ buscar }}"</span>
+    {% endif %}
+    {% if tipo_filtro %}
+    <span class="filter-chip"><i data-lucide="tag" style="width:12px;height:12px;"></i> {{ tipo_filtro | replace("_", " ") }}</span>
+    {% endif %}
+    {% if fecha_desde %}
+    <span class="filter-chip"><i data-lucide="calendar" style="width:12px;height:12px;"></i> Desde {{ fecha_desde }}</span>
+    {% endif %}
+    {% if fecha_hasta %}
+    <span class="filter-chip"><i data-lucide="calendar" style="width:12px;height:12px;"></i> Hasta {{ fecha_hasta }}</span>
+    {% endif %}
+</div>
+{% endif %}
+
 {% if movimientos %}
 <div class="card">
-    <div class="table-responsive">
-    <table>
+    <!-- Desktop table -->
+    <div class="mov-table-wrap table-responsive">
+    <table class="mov-table">
         <thead>
             <tr>
                 <th>Fecha</th>
@@ -68,7 +334,7 @@
                     {% endif %}
                 </td>
                 <td><span class="badge badge-{{ m.tipo | lower }}">{{ m.tipo | replace("_", " ") }}</span></td>
-                <td>{{ m.signo }}</td>
+                <td><span class="signo-pill {{ 'signo-cre' if m.signo == 'CREDITO' else 'signo-deb' }}">{{ m.signo }}</span></td>
                 <td class="num">${{ "{:,.2f}".format(m.importe) }}</td>
                 <td class="num">
                     {% if m.saldo_posterior is not none %}
@@ -81,15 +347,64 @@
     </table>
     </div>
 
+    <!-- Mobile cards -->
+    <div class="mov-cards">
+        {% for m in movimientos %}
+        <div class="mov-card-item {{ 'card-credito' if m.signo == 'CREDITO' else 'card-debito' }}">
+            <div class="mov-card-top">
+                <div class="mov-card-concepto">{{ m.concepto }}</div>
+                <div class="mov-card-importe {{ 'imp-cre' if m.signo == 'CREDITO' else 'imp-deb' }}">
+                    {{ "+" if m.signo == "CREDITO" else "-" }}${{ "{:,.2f}".format(m.importe) }}
+                </div>
+            </div>
+            {% if m.detalle_adicional %}
+            <div class="mov-card-detail">{{ m.detalle_adicional }}</div>
+            {% endif %}
+            <div class="mov-card-meta">
+                <span>{{ m.fecha | fecha_ar }}</span>
+                <span class="badge badge-{{ m.tipo | lower }}">{{ m.tipo | replace("_", " ") }}</span>
+                {% if m.saldo_posterior is not none %}
+                <span>Saldo: ${{ "{:,.2f}".format(m.saldo_posterior) }}</span>
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <!-- Pagination -->
     {% if total_paginas > 1 %}
-    <div class="paginacion">
-        {% if pagina > 1 %}
-        <a href="/movimientos?pagina={{ pagina - 1 }}{{ '&tipo=' + tipo_filtro if tipo_filtro else '' }}{{ '&buscar=' + buscar if buscar else '' }}{{ '&fecha_desde=' + fecha_desde if fecha_desde else '' }}{{ '&fecha_hasta=' + fecha_hasta if fecha_hasta else '' }}" class="btn btn-sm">&laquo; Anterior</a>
-        {% endif %}
-        <span>Pagina {{ pagina }} de {{ total_paginas }}</span>
-        {% if pagina < total_paginas %}
-        <a href="/movimientos?pagina={{ pagina + 1 }}{{ '&tipo=' + tipo_filtro if tipo_filtro else '' }}{{ '&buscar=' + buscar if buscar else '' }}{{ '&fecha_desde=' + fecha_desde if fecha_desde else '' }}{{ '&fecha_hasta=' + fecha_hasta if fecha_hasta else '' }}" class="btn btn-sm">Siguiente &raquo;</a>
-        {% endif %}
+    {% set desde_n = (pagina - 1) * por_pagina + 1 %}
+    {% set hasta_n = [pagina * por_pagina, total] | min %}
+    <div class="pag">
+        <div class="mov-range">
+            Mostrando <strong>{{ "{:,}".format(desde_n) }}</strong> - <strong>{{ "{:,}".format(hasta_n) }}</strong> de <strong>{{ "{:,}".format(total) }}</strong>
+        </div>
+        <div class="pag-pages">
+            {# Build query string for pagination links #}
+            {% set qs = '' %}
+            {% if tipo_filtro %}{% set qs = qs + '&tipo=' + tipo_filtro %}{% endif %}
+            {% if buscar %}{% set qs = qs + '&buscar=' + buscar %}{% endif %}
+            {% if fecha_desde %}{% set qs = qs + '&fecha_desde=' + fecha_desde %}{% endif %}
+            {% if fecha_hasta %}{% set qs = qs + '&fecha_hasta=' + fecha_hasta %}{% endif %}
+
+            <a href="/movimientos?pagina={{ pagina - 1 }}{{ qs }}" class="pag-btn {{ 'disabled' if pagina <= 1 else '' }}">
+                <i data-lucide="chevron-left" style="width:16px;height:16px;"></i>
+            </a>
+
+            {# Page numbers with ellipsis logic #}
+            {% set window = 2 %}
+            {% for p in range(1, total_paginas + 1) %}
+                {% if p == 1 or p == total_paginas or (p >= pagina - window and p <= pagina + window) %}
+                    <a href="/movimientos?pagina={{ p }}{{ qs }}" class="pag-btn {{ 'active' if p == pagina else '' }}">{{ p }}</a>
+                {% elif p == pagina - window - 1 or p == pagina + window + 1 %}
+                    <span class="pag-ellipsis">...</span>
+                {% endif %}
+            {% endfor %}
+
+            <a href="/movimientos?pagina={{ pagina + 1 }}{{ qs }}" class="pag-btn {{ 'disabled' if pagina >= total_paginas else '' }}">
+                <i data-lucide="chevron-right" style="width:16px;height:16px;"></i>
+            </a>
+        </div>
     </div>
     {% endif %}
 </div>
@@ -97,7 +412,11 @@
 <div class="card">
     <div class="empty-state">
         <div class="empty-icon"><i data-lucide="search"></i></div>
+        {% if hay_filtros %}
         <p>No se encontraron movimientos con esos filtros.</p>
+        {% else %}
+        <p>No hay movimientos cargados. <a href="/upload">Subi un extracto PDF</a> para empezar.</p>
+        {% endif %}
     </div>
 </div>
 {% endif %}

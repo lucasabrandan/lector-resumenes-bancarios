@@ -4,6 +4,7 @@ Entry point de la aplicación FastAPI.
 Registra las rutas HTML (Jinja + HTMX) y crea las tablas al arrancar.
 """
 
+import asyncio
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -33,6 +34,25 @@ from fastapi.templating import Jinja2Templates
 from app.db.base import crear_tablas, SessionLocal
 from app.api.auth import AuthMiddleware, crear_cookie, COOKIE_NAME
 from app.services.usuarios import autenticar, crear_admin_si_no_existe
+from app.services.configuracion import purgar_datos_expirados
+
+logger = logging.getLogger(__name__)
+
+
+async def _tarea_purga_periodica():
+    """Revisa y elimina datos expirados cada 10 minutos."""
+    while True:
+        await asyncio.sleep(600)
+        db = SessionLocal()
+        try:
+            resultado = purgar_datos_expirados(db)
+            total = sum(resultado.values())
+            if total > 0:
+                logger.info("Purga automatica: %s registros eliminados %s", total, resultado)
+        except Exception:
+            logger.exception("Error en purga automatica")
+        finally:
+            db.close()
 
 
 @asynccontextmanager
@@ -41,9 +61,18 @@ async def lifespan(app: FastAPI):
     db = SessionLocal()
     try:
         crear_admin_si_no_existe(db)
+        # Purgar al arrancar
+        resultado = purgar_datos_expirados(db)
+        total = sum(resultado.values())
+        if total > 0:
+            logger.info("Purga al arrancar: %s registros eliminados %s", total, resultado)
     finally:
         db.close()
+
+    # Lanzar tarea de purga periódica
+    tarea = asyncio.create_task(_tarea_purga_periodica())
     yield
+    tarea.cancel()
 
 
 app = FastAPI(

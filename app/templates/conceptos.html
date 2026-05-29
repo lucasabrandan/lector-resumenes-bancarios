@@ -21,7 +21,7 @@
                 <select name="tipo" id="tipo">
                     <option value="">Todos</option>
                     {% for t in tipos %}
-                    <option value="{{ t }}" {{ "selected" if t == tipo_filtro else "" }}>{{ t }}</option>
+                    <option value="{{ t }}" {{ "selected" if t == tipo_filtro else "" }}>{{ t | replace("_", " ") }}</option>
                     {% endfor %}
                 </select>
             </div>
@@ -56,25 +56,26 @@
 
 <!-- Resumen general -->
 <div class="cr-stats">
-    <div class="cr-stat">
+    <div class="cr-stat-card">
         <span class="cr-stat-val">{{ reporte.conceptos | length }}</span>
         <span class="cr-stat-lbl">conceptos</span>
     </div>
-    <div class="cr-stat">
+    <div class="cr-stat-card">
         <span class="cr-stat-val">{{ "{:,}".format(reporte.total_cantidad) }}</span>
         <span class="cr-stat-lbl">movimientos</span>
     </div>
-    <div class="cr-stat">
+    <div class="cr-stat-card">
         <span class="cr-stat-val cr-deb">${{ "{:,.2f}".format(reporte.total_debito) }}</span>
         <span class="cr-stat-lbl">debitos</span>
     </div>
-    <div class="cr-stat">
+    <div class="cr-stat-card">
         <span class="cr-stat-val cr-cre">${{ "{:,.2f}".format(reporte.total_credito) }}</span>
         <span class="cr-stat-lbl">creditos</span>
     </div>
 </div>
 
-<div class="card">
+<!-- Desktop table -->
+<div class="card cr-desktop">
     <div class="card-header">
         <h2>Detalle por concepto</h2>
         <button class="btn btn-sm" id="btnExpandAll" type="button">
@@ -206,6 +207,62 @@
     </table>
     </div>
 </div>
+
+<!-- Mobile accordion cards -->
+<div class="cr-mobile">
+    {% for cr in reporte.conceptos %}
+    <div class="cr-card" data-cidx="{{ loop.index }}">
+        <div class="cr-card-header">
+            <div class="cr-card-left">
+                <div class="cr-card-concepto">{{ cr.concepto }}</div>
+                <div class="cr-card-meta">
+                    <span class="badge badge-{{ cr.tipo | lower }}">{{ cr.tipo | replace("_", " ") }}</span>
+                    <span>{{ cr.cantidad_meses }} meses</span>
+                    <span>{{ cr.total_cantidad }} mov.</span>
+                </div>
+            </div>
+            <div class="cr-card-right">
+                <div class="cr-card-neto {% if cr.total_neto >= 0 %}cr-cre{% else %}cr-deb{% endif %}">
+                    ${{ "{:,.2f}".format(cr.total_neto) }}
+                </div>
+                <i data-lucide="chevron-down" class="cr-card-chevron"></i>
+            </div>
+        </div>
+        <div class="cr-card-body" id="cbody-{{ loop.index }}">
+            <div class="cr-card-totals">
+                {% if cr.total_debito > 0 %}
+                <span class="cr-deb">Deb: ${{ "{:,.2f}".format(cr.total_debito) }}</span>
+                {% endif %}
+                {% if cr.total_credito > 0 %}
+                <span class="cr-cre">Cre: ${{ "{:,.2f}".format(cr.total_credito) }}</span>
+                {% endif %}
+            </div>
+            {% for p in reporte.periodos %}
+            {% set det = cr.meses.get(p) %}
+            {% if det %}
+            {% set anio = p.split('-')[0]|int %}
+            {% set mes = p.split('-')[1]|int %}
+            {% set fd = "%04d-%02d-01"|format(anio, mes) %}
+            {% set dias = [0,31,28,31,30,31,30,31,31,30,31,30,31] %}
+            {% set ultimo = dias[mes] %}
+            {% if mes == 2 and (anio % 4 == 0 and (anio % 100 != 0 or anio % 400 == 0)) %}
+            {% set ultimo = 29 %}
+            {% endif %}
+            {% set fh = "%04d-%02d-%02d"|format(anio, mes, ultimo) %}
+            <a href="/movimientos?buscar={{ cr.concepto|urlencode }}&fecha_desde={{ fd }}&fecha_hasta={{ fh }}" class="cr-card-mes">
+                <span class="cr-card-mes-label">{{ periodo_label(p) }}</span>
+                <span class="cr-card-mes-cant">{{ det.cantidad }}x</span>
+                <span class="cr-card-mes-neto {% if det.total_neto >= 0 %}cr-cre{% else %}cr-deb{% endif %}">
+                    ${{ "{:,.2f}".format(det.total_neto) }}
+                </span>
+                <i data-lucide="chevron-right" style="width:14px;height:14px;color:var(--text-muted);"></i>
+            </a>
+            {% endif %}
+            {% endfor %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
 {% else %}
 <div class="card">
     <div class="empty-state">
@@ -220,16 +277,20 @@
 <style>
     /* Stats bar */
     .cr-stats {
-        display: flex;
-        gap: 1.5rem;
-        flex-wrap: wrap;
-        margin-bottom: 1rem;
-        padding: 0.75rem 0;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 1rem;
+        margin-bottom: 1.25rem;
     }
-    .cr-stat {
+    .cr-stat-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        padding: 1rem 1.15rem;
+        box-shadow: var(--shadow-xs);
         display: flex;
         align-items: baseline;
-        gap: 0.4rem;
+        gap: 0.5rem;
     }
     .cr-stat-val {
         font-size: 1.15rem;
@@ -237,25 +298,32 @@
     }
     .cr-stat-lbl {
         font-size: 0.8rem;
-        color: var(--text-muted, #6b7280);
+        color: var(--text-muted);
     }
 
     /* Colors */
-    .cr-deb { color: var(--danger, #dc2626); }
+    .cr-deb { color: var(--error, #dc2626); }
     .cr-cre { color: var(--success, #16a34a); }
     .cr-muted { color: var(--text-muted, #9ca3af); }
 
     /* Main table */
     .cr-table { width: 100%; }
+    .cr-table thead th {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        background: var(--border-light);
+        box-shadow: 0 1px 0 var(--border);
+    }
     .cr-row {
         cursor: pointer;
         transition: background 0.1s;
     }
     .cr-row:hover td {
-        background: var(--bg-hover, #f9fafb);
+        background: var(--border-light);
     }
     .cr-row.expanded td {
-        background: var(--bg-hover, #f3f4f6);
+        background: var(--border-light);
         font-weight: 500;
     }
     .cr-chevron {
@@ -267,11 +335,11 @@
         width: 16px;
         height: 16px;
         transition: transform 0.2s;
-        color: var(--text-muted, #9ca3af);
+        color: var(--text-muted);
     }
     .cr-row.expanded .cr-icon {
         transform: rotate(90deg);
-        color: var(--primary, #2563eb);
+        color: var(--primary);
     }
     .cr-concepto {
         max-width: 350px;
@@ -281,16 +349,12 @@
     }
 
     /* Detail row */
-    .cr-detail {
-        display: none;
-    }
-    .cr-detail.visible {
-        display: table-row;
-    }
+    .cr-detail { display: none; }
+    .cr-detail.visible { display: table-row; }
     .cr-detail > td {
         padding: 0 0 0 2.5rem !important;
-        background: var(--bg-hover, #f9fafb);
-        border-bottom: 2px solid var(--border, #e5e7eb);
+        background: var(--border-light);
+        border-bottom: 2px solid var(--border);
     }
 
     /* Sub-table */
@@ -302,20 +366,22 @@
     }
     .cr-subtable thead th {
         background: transparent;
-        border-bottom: 1px solid var(--border, #e5e7eb);
+        border-bottom: 1px solid var(--border);
         font-size: 0.8em;
         text-transform: uppercase;
         letter-spacing: 0.03em;
-        color: var(--text-muted, #6b7280);
+        color: var(--text-muted);
         padding: 0.3rem 0.5rem;
+        position: static;
+        box-shadow: none;
     }
     .cr-subtable tbody td {
         padding: 0.35rem 0.5rem;
-        border-bottom: 1px solid var(--border-light, #f3f4f6);
+        border-bottom: 1px solid var(--border-light);
     }
     .cr-subtable tfoot td {
         padding: 0.4rem 0.5rem;
-        border-top: 2px solid var(--border, #e5e7eb);
+        border-top: 2px solid var(--border);
         background: rgba(0,0,0,0.02);
     }
 
@@ -325,14 +391,113 @@
         transition: background 0.1s;
     }
     .cr-mes-link:hover td {
-        background: var(--bg-card, #fff) !important;
-        color: var(--primary, #2563eb);
+        background: var(--card-bg) !important;
+        color: var(--primary);
     }
 
     /* Total row */
     .cr-total-row td {
-        background: var(--bg-hover, #f3f4f6);
-        border-top: 2px solid var(--border, #e5e7eb);
+        background: var(--border-light);
+        border-top: 2px solid var(--border);
+    }
+
+    /* Mobile accordion */
+    .cr-mobile { display: none; }
+
+    .cr-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: var(--radius-sm);
+        margin-bottom: 0.5rem;
+        overflow: hidden;
+    }
+    .cr-card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.85rem 1rem;
+        cursor: pointer;
+        gap: 0.75rem;
+    }
+    .cr-card-left { min-width: 0; flex: 1; }
+    .cr-card-concepto {
+        font-size: 0.85rem;
+        font-weight: 600;
+        color: var(--text);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+    .cr-card-meta {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        margin-top: 0.25rem;
+        font-size: 0.72rem;
+        color: var(--text-muted);
+    }
+    .cr-card-right {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        flex-shrink: 0;
+    }
+    .cr-card-neto {
+        font-size: 0.95rem;
+        font-weight: 700;
+        font-variant-numeric: tabular-nums;
+    }
+    .cr-card-chevron {
+        width: 18px;
+        height: 18px;
+        color: var(--text-muted);
+        transition: transform 0.2s;
+    }
+    .cr-card.expanded .cr-card-chevron {
+        transform: rotate(180deg);
+        color: var(--primary);
+    }
+
+    .cr-card-body {
+        display: none;
+        padding: 0 1rem 0.75rem;
+        border-top: 1px solid var(--border-light);
+    }
+    .cr-card.expanded .cr-card-body { display: block; }
+
+    .cr-card-totals {
+        display: flex;
+        gap: 1rem;
+        padding: 0.6rem 0;
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
+    .cr-card-mes {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid var(--border-light);
+        text-decoration: none;
+        color: var(--text);
+        font-size: 0.82rem;
+    }
+    .cr-card-mes:last-child { border-bottom: none; }
+    .cr-card-mes:active { background: var(--border-light); }
+    .cr-card-mes-label { flex: 1; }
+    .cr-card-mes-cant { color: var(--text-muted); font-size: 0.75rem; }
+    .cr-card-mes-neto { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+    @media (max-width: 768px) {
+        .cr-stats { grid-template-columns: repeat(2, 1fr); gap: 0.5rem; }
+        .cr-stat-card { padding: 0.75rem; }
+        .cr-stat-val { font-size: 0.95rem; }
+        .cr-desktop { display: none; }
+        .cr-mobile { display: block; }
+    }
+
+    @media (max-width: 480px) {
+        .cr-stats { grid-template-columns: 1fr 1fr; }
     }
 </style>
 {% endblock %}
@@ -342,7 +507,7 @@
 (function() {
     var allExpanded = false;
 
-    // Toggle individual row
+    // Desktop: Toggle individual row
     document.querySelectorAll('.cr-row').forEach(function(row) {
         row.addEventListener('click', function() {
             var idx = this.getAttribute('data-idx');
@@ -354,7 +519,7 @@
         });
     });
 
-    // Expand/collapse all
+    // Desktop: Expand/collapse all
     var btn = document.getElementById('btnExpandAll');
     if (btn) {
         btn.addEventListener('click', function() {
@@ -371,6 +536,15 @@
             lucide.createIcons();
         });
     }
+
+    // Mobile: Toggle cards
+    document.querySelectorAll('.cr-card-header').forEach(function(header) {
+        header.addEventListener('click', function() {
+            var card = this.closest('.cr-card');
+            card.classList.toggle('expanded');
+            lucide.createIcons();
+        });
+    });
 })();
 </script>
 {% endblock %}

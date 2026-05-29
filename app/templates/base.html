@@ -78,6 +78,11 @@
                     <i data-lucide="shield"></i> Usuarios
                 </a>
                 {% endif %}
+                {% if usuario and usuario.tiene_permiso('configuracion') %}
+                <a href="/configuracion" class="sidebar-link {{ 'active' if '/configuracion' in request.url.path else '' }}">
+                    <i data-lucide="settings"></i> Configuracion
+                </a>
+                {% endif %}
             </nav>
 
             <div class="sidebar-footer">
@@ -185,6 +190,12 @@
                 <a href="/usuarios" class="more-sheet-item {{ 'active' if '/usuarios' in request.url.path else '' }}">
                     <i data-lucide="shield"></i>
                     Usuarios
+                </a>
+                {% endif %}
+                {% if usuario and usuario.tiene_permiso('configuracion') %}
+                <a href="/configuracion" class="more-sheet-item {{ 'active' if '/configuracion' in request.url.path else '' }}">
+                    <i data-lucide="settings"></i>
+                    Configuracion
                 </a>
                 {% endif %}
                 <a href="/logout" class="more-sheet-item more-sheet-item-logout">

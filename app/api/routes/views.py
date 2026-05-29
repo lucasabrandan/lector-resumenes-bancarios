@@ -26,6 +26,7 @@ from app.services.movimientos import (
     listar_archivos_cargados,
     exportar_movimientos_xlsx,
     resumen_mercadopago,
+    resumen_filtrado,
 )
 from app.services.usuarios import (
     listar_usuarios,
@@ -61,6 +62,12 @@ from app.services.sircreb import (
     generar_reporte_sircreb,
     resumen_totales_sircreb,
     exportar_sircreb_xlsx,
+)
+from app.services.configuracion import (
+    obtener_config,
+    actualizar_retencion,
+    OPCIONES_RETENCION,
+    label_retencion,
 )
 
 router = APIRouter()
@@ -202,6 +209,11 @@ async def upload_pdf(
 
     try:
         cantidad, resumen_mp = procesar_pdf(tmp_path, db)
+        # Eliminar PDF del disco — la data ya está en la DB
+        try:
+            tmp_path.unlink()
+        except OSError:
+            pass
         ctx["archivos"] = listar_archivos_cargados(db)
         ctx["exito"] = f"Se procesaron {cantidad:,} movimientos del archivo '{archivo.filename}'."
         if resumen_mp:
@@ -304,8 +316,11 @@ async def movimientos_page(
     )
     total = contar_movimientos_filtrados(db, tipo=tipo, buscar=buscar, fecha_desde=fd, fecha_hasta=fh)
     total_paginas = max(1, (total + por_pagina - 1) // por_pagina)
+    resumen = resumen_filtrado(db, tipo=tipo, buscar=buscar, fecha_desde=fd, fecha_hasta=fh)
 
     tipos = [t.value for t in TipoMovimiento]
+
+    hay_filtros = any([tipo, buscar, fecha_desde, fecha_hasta])
 
     return templates.TemplateResponse("movimientos.html", _ctx(
         request,
@@ -318,6 +333,9 @@ async def movimientos_page(
         pagina=pagina,
         total_paginas=total_paginas,
         total=total,
+        por_pagina=por_pagina,
+        resumen=resumen,
+        hay_filtros=hay_filtros,
     ))
 
 
@@ -682,6 +700,7 @@ ETIQUETAS_PERMISOS = {
     "sircreb": "SIRCREB (IIBB)",
     "monotributo": "Panel Monotributo",
     "usuarios": "Gestionar usuarios",
+    "configuracion": "Configuracion",
 }
 
 DESCRIPCIONES_PERMISOS = {
@@ -693,6 +712,7 @@ DESCRIPCIONES_PERMISOS = {
     "sircreb": "importar archivos SIRCREB y ver percepciones IIBB por jurisdiccion",
     "monotributo": "ver panel de monotributo y cargar comprobantes",
     "usuarios": "administrar usuarios y permisos",
+    "configuracion": "configurar retencion de datos y seguridad",
 }
 
 
@@ -784,3 +804,32 @@ async def usuarios_eliminar(request: Request, usuario_id: int, db: Session = Dep
 
     eliminar_usuario(usuario_id, db)
     return RedirectResponse("/usuarios", status_code=303)
+
+
+# --------------------------------------------------------------------------
+# Configuración del sistema (solo admin)
+# --------------------------------------------------------------------------
+
+@router.get("/configuracion", response_class=HTMLResponse)
+async def configuracion_page(request: Request, db: Session = Depends(get_db)):
+    config = obtener_config(db)
+    return templates.TemplateResponse("configuracion.html", _ctx(
+        request,
+        config=config,
+        opciones_retencion=OPCIONES_RETENCION,
+        label_retencion=label_retencion,
+    ))
+
+
+@router.post("/configuracion")
+async def configuracion_guardar(request: Request, db: Session = Depends(get_db)):
+    form = await request.form()
+    horas = int(form.get("retencion_horas", 0))
+    config = actualizar_retencion(horas, db)
+    return templates.TemplateResponse("configuracion.html", _ctx(
+        request,
+        config=config,
+        opciones_retencion=OPCIONES_RETENCION,
+        label_retencion=label_retencion,
+        exito=f"Tiempo de retencion actualizado a: {label_retencion(horas)}.",
+    ))

@@ -37,3 +37,27 @@ def crear_tablas():
     """Crea todas las tablas. Para desarrollo rápido, sin Alembic."""
     import app.db.models  # noqa: F401 — registra todos los modelos antes de create_all
     Base.metadata.create_all(bind=engine)
+    _migrar_columnas()
+
+
+def _migrar_columnas():
+    """Agrega columnas nuevas a tablas existentes (mini-migración sin Alembic)."""
+    import sqlite3
+    conn = sqlite3.connect(str(_DB_PATH))
+    cursor = conn.cursor()
+
+    _add_column_if_missing(cursor, "movimientos", "creado", "DATETIME")
+    _add_column_if_missing(cursor, "configuracion", "id", None)  # tabla nueva, skip
+
+    conn.commit()
+    conn.close()
+
+
+def _add_column_if_missing(cursor, table: str, column: str, col_type: str | None):
+    """Agrega una columna si no existe en la tabla."""
+    if col_type is None:
+        return
+    try:
+        cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}")
+    except Exception:
+        pass  # ya existe
