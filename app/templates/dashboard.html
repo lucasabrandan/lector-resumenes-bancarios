@@ -2,63 +2,85 @@
 
 {% block title %}Dashboard - Lector de Resumenes{% endblock %}
 
-{% block head %}
-{% set puede_ver_reporte = usuario and usuario.tiene_permiso('reporte') %}
-{% if total_movimientos > 0 and puede_ver_reporte %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
-{% endif %}
-{% endblock %}
-
 {% block content %}
 {% if limpiar_exito %}
 <div class="alert alert-success" data-toast>{{ limpiar_exito }}</div>
 {% endif %}
 
 {% if total_movimientos == 0 %}
+<div class="dash-top">
+    <div>
+        <h1 class="dash-title">Bienvenido</h1>
+        <p class="dash-subtitle">Para empezar, subi un extracto bancario en PDF</p>
+    </div>
+</div>
+
 <div class="card">
-    <div class="empty-state">
-        <div class="empty-icon"><i data-lucide="file-text"></i></div>
-        <h2>Sin datos cargados</h2>
-        <p>No hay movimientos todavia. <a href="/upload">Subi un extracto PDF</a> para empezar.</p>
+    <div class="dash-shortcuts">
+        {% if usuario and usuario.tiene_permiso('upload') %}
+        <a href="/upload" class="dash-shortcut">
+            <div class="dash-shortcut-icon" style="background:#eef2ff;color:var(--primary);">
+                <i data-lucide="upload"></i>
+            </div>
+            <div class="dash-shortcut-text">
+                <strong>1. Subir extracto del banco</strong>
+                <span>Carga el PDF del Banco Supervielle o MercadoPago</span>
+            </div>
+            <i data-lucide="chevron-right" class="dash-shortcut-arrow"></i>
+        </a>
+        {% endif %}
+        {% if usuario and usuario.tiene_permiso('movimientos') %}
+        <a href="/conceptos" class="dash-shortcut" style="opacity:0.5;pointer-events:none;">
+            <div class="dash-shortcut-icon" style="background:#f0fdf4;color:var(--success);">
+                <i data-lucide="repeat"></i>
+            </div>
+            <div class="dash-shortcut-text">
+                <strong>2. Ver conceptos recurrentes</strong>
+                <span>Analizar que se repite mes a mes</span>
+            </div>
+            <i data-lucide="chevron-right" class="dash-shortcut-arrow"></i>
+        </a>
+        {% endif %}
+        {% if usuario and usuario.tiene_permiso('reporte') %}
+        <a href="/reporte" class="dash-shortcut" style="opacity:0.5;pointer-events:none;">
+            <div class="dash-shortcut-icon" style="background:#f5f3ff;color:#7c3aed;">
+                <i data-lucide="file-text"></i>
+            </div>
+            <div class="dash-shortcut-text">
+                <strong>3. Generar reportes</strong>
+                <span>Ley 25.413, percepciones y retenciones</span>
+            </div>
+            <i data-lucide="chevron-right" class="dash-shortcut-arrow"></i>
+        </a>
+        {% endif %}
     </div>
 </div>
 
 {% else %}
-{# --- Quick actions + title --- #}
+{% set meses = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"] %}
+
+{# --- Header --- #}
 <div class="dash-top">
     <div>
-        <h1 class="dash-title">Dashboard</h1>
+        <h1 class="dash-title">Resumen del extracto</h1>
         <p class="dash-subtitle">
-            {% set meses = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"] %}
             {{ meses[resumen.fecha_desde.month] }} {{ resumen.fecha_desde.year }} &mdash; {{ meses[resumen.fecha_hasta.month] }} {{ resumen.fecha_hasta.year }}
+            &middot; {{ "{:,}".format(resumen.total_movimientos) }} movimientos
         </p>
     </div>
     <div class="dash-actions">
         {% if usuario and usuario.tiene_permiso('upload') %}
-        <a href="/upload" class="btn btn-primary"><i data-lucide="upload"></i> Subir PDF</a>
-        {% endif %}
-        {% if usuario and usuario.tiene_permiso('reporte') %}
-        <a href="/reporte/descargar" class="btn btn-success"><i data-lucide="download"></i> Descargar XLSX</a>
-        {% endif %}
-        {% if usuario and usuario.tiene_permiso('upload') %}
         <form method="post" action="/limpiar-datos" style="display:inline;"
-              data-confirm="Se eliminaran TODOS los movimientos, comprobantes y percepciones cargados. Asegurate de haber exportado lo que necesitas. Esta accion no se puede deshacer."
+              data-confirm="Se eliminaran TODOS los movimientos, comprobantes y percepciones cargados. Esta accion no se puede deshacer."
               data-confirm-title="Limpiar todos los datos">
-            <button type="submit" class="btn btn-danger"><i data-lucide="trash-2"></i> Limpiar datos</button>
+            <button type="submit" class="btn btn-sm btn-danger"><i data-lucide="trash-2"></i> Limpiar datos</button>
         </form>
         {% endif %}
     </div>
 </div>
 
-{# --- Stat cards --- #}
+{# --- Stat cards: resumen compacto --- #}
 <div class="grid grid-4">
-    <div class="card stat-card">
-        <div class="stat-icon stat-icon-blue"><i data-lucide="bar-chart-3"></i></div>
-        <div class="stat-body">
-            <div class="stat-number">{{ "{:,}".format(resumen.total_movimientos) }}</div>
-            <div class="stat-label">Movimientos</div>
-        </div>
-    </div>
     <div class="card stat-card stat-debito">
         <div class="stat-icon stat-icon-red"><i data-lucide="arrow-down"></i></div>
         <div class="stat-body">
@@ -74,305 +96,148 @@
         </div>
     </div>
     {% if usuario and usuario.tiene_permiso('reporte') %}
+    {% set total_imp = [] %}
+    {% for r in reporte_ley %}{% if total_imp.append(r.total_neto) %}{% endif %}{% endfor %}
     <div class="card stat-card">
-        <div class="stat-icon stat-icon-purple"><i data-lucide="star"></i></div>
+        <div class="stat-icon stat-icon-purple"><i data-lucide="receipt"></i></div>
         <div class="stat-body">
-            {% set total_imp = [] %}
-            {% for r in reporte_ley %}{% if total_imp.append(r.total_neto) %}{% endif %}{% endfor %}
             <div class="stat-number">${{ "{:,.0f}".format(total_imp | sum) }}</div>
-            <div class="stat-label">Total Imp. Ley 25.413</div>
+            <div class="stat-label">Imp. Ley 25.413</div>
         </div>
     </div>
     {% endif %}
+    <div class="card stat-card">
+        <div class="stat-icon stat-icon-blue"><i data-lucide="calendar-range"></i></div>
+        <div class="stat-body">
+            <div class="stat-number">{{ resumen.cantidad_meses if resumen.cantidad_meses is defined else reporte_ley|length if reporte_ley else '—' }}</div>
+            <div class="stat-label">Meses cargados</div>
+        </div>
+    </div>
 </div>
 
-{# --- Bar chart Ley 25.413 --- #}
-{% set puede_ver_reporte = usuario and usuario.tiene_permiso('reporte') %}
-{% if puede_ver_reporte and reporte_ley %}
+{# --- Accesos rapidos --- #}
 <div class="card">
-    <div class="card-header">
-        <h2>Impuesto Ley 25.413 por mes</h2>
-        <div style="display:flex;align-items:center;gap:0.75rem;">
-            <span id="mesSeleccionado" class="badge" style="display:none;"></span>
-            <button id="btnVolverGeneral" class="btn btn-sm" style="display:none;" onclick="volverVistaGeneral()"><i data-lucide="arrow-left"></i> Volver</button>
-            <a href="/reporte" class="btn btn-sm">Ver detalle completo &rarr;</a>
-        </div>
+    <div class="card-header" style="border-bottom:none;padding-bottom:0;">
+        <h2>Que necesitas hacer?</h2>
     </div>
-    <div style="display:flex;gap:1rem;flex-wrap:wrap;">
-        <div class="chart-container" style="flex:1;min-width:0;">
-            <canvas id="chartLey25413"></canvas>
-        </div>
-        <div id="detalleContainer" class="chart-container" style="flex:1;min-width:0;display:none;">
-            <canvas id="chartDetalleMes"></canvas>
-        </div>
+    <div class="dash-shortcuts">
+        {% if usuario and usuario.tiene_permiso('upload') %}
+        <a href="/upload" class="dash-shortcut">
+            <div class="dash-shortcut-icon" style="background:#eef2ff;color:var(--primary);">
+                <i data-lucide="upload"></i>
+            </div>
+            <div class="dash-shortcut-text">
+                <strong>Subir extracto</strong>
+                <span>Cargar un nuevo PDF del banco</span>
+            </div>
+            <i data-lucide="chevron-right" class="dash-shortcut-arrow"></i>
+        </a>
+        {% endif %}
+        {% if usuario and usuario.tiene_permiso('movimientos') %}
+        <a href="/conceptos" class="dash-shortcut">
+            <div class="dash-shortcut-icon" style="background:#f0fdf4;color:var(--success);">
+                <i data-lucide="repeat"></i>
+            </div>
+            <div class="dash-shortcut-text">
+                <strong>Conceptos recurrentes</strong>
+                <span>Ver que se repite mes a mes con detalle</span>
+            </div>
+            <i data-lucide="chevron-right" class="dash-shortcut-arrow"></i>
+        </a>
+        <a href="/movimientos" class="dash-shortcut">
+            <div class="dash-shortcut-icon" style="background:#fef3c7;color:var(--warning);">
+                <i data-lucide="list"></i>
+            </div>
+            <div class="dash-shortcut-text">
+                <strong>Movimientos</strong>
+                <span>Buscar y filtrar movimientos individuales</span>
+            </div>
+            <i data-lucide="chevron-right" class="dash-shortcut-arrow"></i>
+        </a>
+        {% endif %}
+        {% if usuario and usuario.tiene_permiso('reporte') %}
+        <a href="/reporte" class="dash-shortcut">
+            <div class="dash-shortcut-icon" style="background:#f5f3ff;color:#7c3aed;">
+                <i data-lucide="file-text"></i>
+            </div>
+            <div class="dash-shortcut-text">
+                <strong>Reporte Ley 25.413</strong>
+                <span>Imp. debitos y creditos para ARCA</span>
+            </div>
+            <i data-lucide="chevron-right" class="dash-shortcut-arrow"></i>
+        </a>
+        {% endif %}
+        {% if usuario and usuario.tiene_permiso('percepciones') %}
+        <a href="/percepciones" class="dash-shortcut">
+            <div class="dash-shortcut-icon" style="background:#fef2f2;color:var(--error);">
+                <i data-lucide="receipt"></i>
+            </div>
+            <div class="dash-shortcut-text">
+                <strong>Percepciones y Retenciones</strong>
+                <span>IVA, IIBB, Ganancias sufridas</span>
+            </div>
+            <i data-lucide="chevron-right" class="dash-shortcut-arrow"></i>
+        </a>
+        {% endif %}
     </div>
 </div>
 
-{# --- Reporte table --- #}
-<div class="card">
-    <div class="card-header">
-        <h2>Resumen Ley 25.413</h2>
-    </div>
-    <div class="table-responsive">
-    <table>
-        <thead>
-            <tr>
-                <th>Periodo</th>
-                <th class="num">Imp. s/Debitos</th>
-                <th class="num">Imp. s/Creditos</th>
-                <th class="num">Total Neto</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% set ns = namespace(td=0, tc=0, tn=0) %}
-            {% for r in reporte_ley %}
-            <tr>
-                <td>{{ r.periodo }}</td>
-                <td class="num">${{ "{:,.2f}".format(r.impuesto_sobre_debitos) }}</td>
-                <td class="num">${{ "{:,.2f}".format(r.impuesto_sobre_creditos) }}</td>
-                <td class="num"><strong>${{ "{:,.2f}".format(r.total_neto) }}</strong></td>
-            </tr>
-            {% set ns.td = ns.td + r.impuesto_sobre_debitos %}
-            {% set ns.tc = ns.tc + r.impuesto_sobre_creditos %}
-            {% set ns.tn = ns.tn + r.total_neto %}
-            {% endfor %}
-        </tbody>
-        <tfoot>
-            <tr class="total-row">
-                <td><strong>TOTAL</strong></td>
-                <td class="num"><strong>${{ "{:,.2f}".format(ns.td) }}</strong></td>
-                <td class="num"><strong>${{ "{:,.2f}".format(ns.tc) }}</strong></td>
-                <td class="num"><strong>${{ "{:,.2f}".format(ns.tn) }}</strong></td>
-            </tr>
-        </tfoot>
-    </table>
-    </div>
-</div>
-
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    var reporteLey = [
-        {% for r in reporte_ley %}{
-            label: '{{ r.mes_nombre[:3] }} {{ r.anio }}',
-            mesNombre: '{{ r.mes_nombre }}',
-            anio: {{ r.anio }},
-            mes: {{ r.mes }},
-            debitos: {{ r.impuesto_sobre_debitos }},
-            creditos: {{ r.impuesto_sobre_creditos }}
-        }{% if not loop.last %},{% endif %}{% endfor %}
-    ];
-
-    var chartDetalle = null;
-    var mesActivo = -1;
-
-    var TIPO_LABELS = {
-        'COMPRA_DEBITO': 'Compras Debito',
-        'EXTRACCION_ATM': 'Extracciones ATM',
-        'TRANSFERENCIA_ENVIADA': 'Transf. Enviadas',
-        'TRANSFERENCIA_RECIBIDA': 'Transf. Recibidas',
-        'DEBIN': 'DEBIN',
-        'HOMEBANKING': 'Homebanking',
-        'CHEQUE_DEPOSITADO': 'Cheques Depositados',
-        'CHEQUE_PAGADO': 'Cheques Pagados',
-        'CHEQUE_RECHAZADO': 'Cheques Rechazados',
-        'PAGO_SERVICIO': 'Pago Servicios',
-        'PRESTAMO_DESEMBOLSO': 'Prestamo Desembolso',
-        'PRESTAMO_CUOTA': 'Prestamo Cuota',
-        'COMISION': 'Comisiones',
-        'IVA': 'IVA',
-        'PERCEPCION_IVA': 'Percepcion IVA',
-        'PERCEPCION_IIBB': 'Percepcion IIBB',
-        'PERCEPCION_GANANCIAS': 'Percepcion Ganancias',
-        'RETENCION_IVA': 'Retencion IVA',
-        'RETENCION_IIBB': 'Retencion IIBB',
-        'RETENCION_GANANCIAS': 'Retencion Ganancias',
-        'RETENCION_SUSS': 'Retencion SUSS',
-        'IMPUESTO_LEY_25413_SOBRE_DEBITOS': 'Imp. Ley 25413 Deb.',
-        'IMPUESTO_LEY_25413_SOBRE_CREDITOS': 'Imp. Ley 25413 Cred.',
-        'IMPUESTO_SELLOS': 'Imp. Sellos',
-        'INTERES': 'Intereses',
-        'DEVOLUCION': 'Devoluciones',
-        'EMBARGO': 'Embargos',
-        'OTRO': 'Otros'
-    };
-
-    var COLORES = [
-        '#7c3aed', '#2563eb', '#059669', '#d97706', '#dc2626',
-        '#0891b2', '#7c3aed', '#db2777', '#4f46e5', '#65a30d',
-        '#ea580c', '#0d9488', '#6366f1', '#ca8a04', '#e11d48'
-    ];
-
-    var ctxBar = document.getElementById('chartLey25413').getContext('2d');
-    var chartPrincipal = new Chart(ctxBar, {
-        type: 'bar',
-        data: {
-            labels: reporteLey.map(function(r) { return r.label; }),
-            datasets: [
-                {
-                    label: 'Imp. s/Debitos',
-                    data: reporteLey.map(function(r) { return r.debitos; }),
-                    backgroundColor: 'rgba(124, 58, 237, 0.75)',
-                    borderColor: 'rgba(124, 58, 237, 1)',
-                    borderWidth: 1, borderRadius: 4
-                },
-                {
-                    label: 'Imp. s/Creditos',
-                    data: reporteLey.map(function(r) { return r.creditos; }),
-                    backgroundColor: 'rgba(37, 99, 235, 0.75)',
-                    borderColor: 'rgba(37, 99, 235, 1)',
-                    borderWidth: 1, borderRadius: 4
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            interaction: { intersect: false, mode: 'index' },
-            onClick: function(evt, elements) {
-                if (elements.length > 0) {
-                    var idx = elements[0].index;
-                    cargarDetalleMes(idx);
-                }
-            },
-            plugins: {
-                legend: { position: 'bottom', labels: { usePointStyle: true, padding: 12, font: { size: 11 } } },
-                tooltip: {
-                    backgroundColor: 'rgba(30,41,59,0.95)', padding: 12,
-                    callbacks: {
-                        label: function(ctx) {
-                            return ctx.dataset.label + ': $' + ctx.parsed.y.toLocaleString('es-AR', {minimumFractionDigits: 2});
-                        },
-                        footer: function() { return 'Click para ver detalle del mes'; }
-                    }
-                }
-            },
-            scales: {
-                y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' },
-                    ticks: { callback: function(v) { return '$' + (v/1000).toFixed(0) + 'k'; } } },
-                x: { grid: { display: false }, ticks: { maxRotation: 45, font: { size: 11 } } }
-            }
-        }
-    });
-
-    function cargarDetalleMes(idx) {
-        var info = reporteLey[idx];
-        mesActivo = idx;
-
-        // Resaltar barra seleccionada
-        chartPrincipal.data.datasets.forEach(function(ds, i) {
-            var colors = reporteLey.map(function(_, j) {
-                var alpha = j === idx ? 1 : 0.3;
-                return i === 0
-                    ? 'rgba(124, 58, 237, ' + alpha + ')'
-                    : 'rgba(37, 99, 235, ' + alpha + ')';
-            });
-            ds.backgroundColor = colors;
-        });
-        chartPrincipal.update();
-
-        // Mostrar badge y boton volver
-        document.getElementById('mesSeleccionado').textContent = info.mesNombre + ' ' + info.anio;
-        document.getElementById('mesSeleccionado').style.display = '';
-        document.getElementById('btnVolverGeneral').style.display = '';
-        document.getElementById('detalleContainer').style.display = '';
-
-        // Fetch detalle
-        fetch('/api/dashboard/mes-detalle?anio=' + info.anio + '&mes=' + info.mes)
-            .then(function(r) { return r.json(); })
-            .then(function(data) { renderDetalle(data, info); });
-    }
-
-    function renderDetalle(data, info) {
-        if (chartDetalle) chartDetalle.destroy();
-
-        // Separar debitos y creditos, ordenar por monto
-        var debitos = data.datos.filter(function(d) { return d.signo === 'DEBITO'; })
-            .sort(function(a, b) { return b.total - a.total; });
-        var creditos = data.datos.filter(function(d) { return d.signo === 'CREDITO'; })
-            .sort(function(a, b) { return b.total - a.total; });
-
-        // Top categorias (max 10 para que se lea bien)
-        var items = debitos.concat(creditos).sort(function(a, b) { return b.total - a.total; }).slice(0, 12);
-
-        var labels = items.map(function(d) {
-            return (TIPO_LABELS[d.tipo] || d.tipo) + (d.signo === 'CREDITO' ? ' (+)' : '');
-        });
-        var valores = items.map(function(d) { return d.total; });
-        var colores = items.map(function(d, i) {
-            return d.signo === 'CREDITO'
-                ? 'rgba(5, 150, 105, 0.75)'
-                : COLORES[i % COLORES.length];
-        });
-
-        var ctx2 = document.getElementById('chartDetalleMes').getContext('2d');
-        chartDetalle = new Chart(ctx2, {
-            type: 'bar',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Monto',
-                    data: valores,
-                    backgroundColor: colores,
-                    borderRadius: 4,
-                    borderSkipped: false
-                }]
-            },
-            options: {
-                indexAxis: 'y',
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    title: {
-                        display: true,
-                        text: 'Desglose ' + info.mesNombre + ' ' + info.anio,
-                        font: { size: 14, weight: '600' },
-                        padding: { bottom: 12 }
-                    },
-                    legend: { display: false },
-                    tooltip: {
-                        backgroundColor: 'rgba(30,41,59,0.95)', padding: 12,
-                        callbacks: {
-                            label: function(ctx) {
-                                var d = items[ctx.dataIndex];
-                                return '$' + ctx.parsed.x.toLocaleString('es-AR', {minimumFractionDigits: 2}) + ' (' + d.cantidad + ' mov.)';
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    x: {
-                        beginAtZero: true,
-                        grid: { color: 'rgba(0,0,0,0.05)' },
-                        ticks: { callback: function(v) { return '$' + (v/1000).toFixed(0) + 'k'; } }
-                    },
-                    y: {
-                        grid: { display: false },
-                        ticks: { font: { size: 11 } }
-                    }
-                }
-            }
-        });
-
-        if (typeof lucide !== 'undefined') lucide.createIcons();
-    }
-
-    window.volverVistaGeneral = function() {
-        mesActivo = -1;
-        // Restaurar colores originales
-        chartPrincipal.data.datasets[0].backgroundColor = 'rgba(124, 58, 237, 0.75)';
-        chartPrincipal.data.datasets[1].backgroundColor = 'rgba(37, 99, 235, 0.75)';
-        chartPrincipal.update();
-
-        document.getElementById('mesSeleccionado').style.display = 'none';
-        document.getElementById('btnVolverGeneral').style.display = 'none';
-        document.getElementById('detalleContainer').style.display = 'none';
-
-        if (chartDetalle) { chartDetalle.destroy(); chartDetalle = null; }
-    };
-
-    if (typeof lucide !== 'undefined') lucide.createIcons();
-});
-</script>
 {% endif %}
-{% endif %}
+{% endblock %}
+
+{% block head %}
+<style>
+    .dash-shortcuts {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        padding: 0.5rem 0;
+    }
+    .dash-shortcut {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 0.85rem 1rem;
+        border-radius: var(--radius-sm);
+        text-decoration: none;
+        color: var(--text);
+        transition: background var(--transition);
+    }
+    .dash-shortcut:hover {
+        background: var(--border-light);
+    }
+    .dash-shortcut-icon {
+        width: 42px;
+        height: 42px;
+        border-radius: var(--radius-xs);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+    .dash-shortcut-icon [data-lucide] {
+        width: 20px;
+        height: 20px;
+    }
+    .dash-shortcut-text {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 0.1rem;
+    }
+    .dash-shortcut-text strong {
+        font-size: 0.95rem;
+        font-weight: 600;
+    }
+    .dash-shortcut-text span {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+    }
+    .dash-shortcut-arrow {
+        width: 16px;
+        height: 16px;
+        color: var(--text-muted);
+        flex-shrink: 0;
+    }
+</style>
 {% endblock %}

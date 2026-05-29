@@ -2,12 +2,6 @@
 
 {% block title %}MercadoPago - Lector de Resumenes{% endblock %}
 
-{% block head %}
-{% if resumen %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
-{% endif %}
-{% endblock %}
-
 {% block content %}
 {% if not resumen %}
 <div class="card">
@@ -19,13 +13,16 @@
 </div>
 
 {% else %}
+{% set meses_nombre = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"] %}
+{% set meses_corto = ["", "Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"] %}
+
 <div class="dash-top">
     <div>
         <h1 class="dash-title">MercadoPago</h1>
         <p class="dash-subtitle">
-            {% set meses = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"] %}
             {% if resumen.fecha_desde and resumen.fecha_hasta %}
-            {{ meses[resumen.fecha_desde.month] }} {{ resumen.fecha_desde.year }} &mdash; {{ meses[resumen.fecha_hasta.month] }} {{ resumen.fecha_hasta.year }}
+            {{ meses_nombre[resumen.fecha_desde.month] }} {{ resumen.fecha_desde.year }} &mdash; {{ meses_nombre[resumen.fecha_hasta.month] }} {{ resumen.fecha_hasta.year }}
+            &middot; {{ "{:,}".format(resumen.total) }} movimientos
             {% endif %}
         </p>
     </div>
@@ -33,13 +30,6 @@
 
 {# --- Stat cards --- #}
 <div class="grid grid-4">
-    <div class="card stat-card">
-        <div class="stat-icon stat-icon-blue"><i data-lucide="bar-chart-3"></i></div>
-        <div class="stat-body">
-            <div class="stat-number">{{ "{:,}".format(resumen.total) }}</div>
-            <div class="stat-label">Movimientos</div>
-        </div>
-    </div>
     <div class="card stat-card stat-credito">
         <div class="stat-icon stat-icon-green"><i data-lucide="arrow-down-left"></i></div>
         <div class="stat-body">
@@ -58,202 +48,117 @@
         <div class="stat-icon stat-icon-purple"><i data-lucide="scale"></i></div>
         <div class="stat-body">
             <div class="stat-number">${{ "{:,.0f}".format(resumen.neto) }}</div>
-            <div class="stat-label">Neto (Entradas - Salidas)</div>
+            <div class="stat-label">Neto</div>
         </div>
     </div>
 </div>
 
-{# --- Charts --- #}
+{# --- Tabla por categoria --- #}
+{% if resumen.por_tipo %}
+<div class="card">
+    <div class="card-header">
+        <h2>Por categoria</h2>
+    </div>
+    <div class="table-responsive">
+    <table>
+        <thead>
+            <tr>
+                <th>Categoria</th>
+                <th>Signo</th>
+                <th class="num">Cantidad</th>
+                <th class="num">Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% set ns = namespace(total_ent=0, total_sal=0) %}
+            {% for item in resumen.por_tipo %}
+            <tr>
+                <td><span class="badge badge-{{ item.tipo | lower }}">{{ item.tipo | replace("_", " ") }}</span></td>
+                <td>{{ "Entrada" if item.signo == "CREDITO" else "Salida" }}</td>
+                <td class="num">{{ "{:,}".format(item.cantidad) }}</td>
+                <td class="num" style="color:{{ 'var(--success, #16a34a)' if item.signo == 'CREDITO' else 'var(--error, #dc2626)' }};">
+                    ${{ "{:,.2f}".format(item.total) }}
+                </td>
+            </tr>
+            {% if item.signo == "CREDITO" %}{% set ns.total_ent = ns.total_ent + item.total %}{% else %}{% set ns.total_sal = ns.total_sal + item.total %}{% endif %}
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr class="total-row">
+                <td colspan="2"><strong>Total Entradas</strong></td>
+                <td></td>
+                <td class="num" style="color:var(--success, #16a34a);"><strong>${{ "{:,.2f}".format(ns.total_ent) }}</strong></td>
+            </tr>
+            <tr class="total-row">
+                <td colspan="2"><strong>Total Salidas</strong></td>
+                <td></td>
+                <td class="num" style="color:var(--error, #dc2626);"><strong>${{ "{:,.2f}".format(ns.total_sal) }}</strong></td>
+            </tr>
+            <tr class="total-row">
+                <td colspan="2"><strong>Neto</strong></td>
+                <td></td>
+                <td class="num"><strong>${{ "{:,.2f}".format(ns.total_ent - ns.total_sal) }}</strong></td>
+            </tr>
+        </tfoot>
+    </table>
+    </div>
+</div>
+{% endif %}
+
+{# --- Tabla mensual --- #}
 {% if resumen.meses %}
 <div class="card">
     <div class="card-header">
-        <h2>Entradas vs Salidas por mes</h2>
+        <h2>Por mes</h2>
     </div>
-    <div class="chart-container">
-        <canvas id="chartMensualMP"></canvas>
-    </div>
-</div>
-{% endif %}
-
-{% if resumen.por_tipo %}
-<div style="display:flex;gap:1rem;flex-wrap:wrap;">
-    <div class="card" style="flex:1;min-width:320px;">
-        <div class="card-header">
-            <h2>Distribucion por categoria</h2>
-        </div>
-        <div class="chart-container">
-            <canvas id="chartTipoMP"></canvas>
-        </div>
-    </div>
-
-    <div class="card" style="flex:1;min-width:320px;">
-        <div class="card-header">
-            <h2>Detalle por categoria</h2>
-        </div>
-        <div class="table-responsive">
-        <table>
-            <thead>
-                <tr>
-                    <th>Categoria</th>
-                    <th>Signo</th>
-                    <th class="num">Cantidad</th>
-                    <th class="num">Total</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% set ns = namespace(total_ent=0, total_sal=0) %}
-                {% for item in resumen.por_tipo %}
-                <tr>
-                    <td><span class="badge badge-{{ item.tipo | lower }}">{{ item.tipo | replace("_", " ") }}</span></td>
-                    <td>{{ "Entrada" if item.signo == "CREDITO" else "Salida" }}</td>
-                    <td class="num">{{ "{:,}".format(item.cantidad) }}</td>
-                    <td class="num" style="color:{{ 'var(--success, #16a34a)' if item.signo == 'CREDITO' else 'var(--error, #dc2626)' }};">
-                        ${{ "{:,.2f}".format(item.total) }}
-                    </td>
-                </tr>
-                {% if item.signo == "CREDITO" %}{% set ns.total_ent = ns.total_ent + item.total %}{% else %}{% set ns.total_sal = ns.total_sal + item.total %}{% endif %}
-                {% endfor %}
-            </tbody>
-            <tfoot>
-                <tr class="total-row">
-                    <td colspan="2"><strong>Total Entradas</strong></td>
-                    <td></td>
-                    <td class="num" style="color:var(--success, #16a34a);"><strong>${{ "{:,.2f}".format(ns.total_ent) }}</strong></td>
-                </tr>
-                <tr class="total-row">
-                    <td colspan="2"><strong>Total Salidas</strong></td>
-                    <td></td>
-                    <td class="num" style="color:var(--error, #dc2626);"><strong>${{ "{:,.2f}".format(ns.total_sal) }}</strong></td>
-                </tr>
-            </tfoot>
-        </table>
-        </div>
+    <div class="table-responsive">
+    <table>
+        <thead>
+            <tr>
+                <th>Mes</th>
+                <th class="num">Entradas</th>
+                <th class="num">Salidas</th>
+                <th class="num">Neto</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% set ns2 = namespace(total_ent=0, total_sal=0) %}
+            {% for clave in resumen.meses.keys() | sort %}
+            {% set m = resumen.meses[clave] %}
+            {% set partes = clave.split('-') %}
+            {% set anio = partes[0] %}
+            {% set mes = partes[1]|int %}
+            {% set neto_mes = m.entradas - m.salidas %}
+            <tr>
+                <td>{{ meses_corto[mes] }} {{ anio }}</td>
+                <td class="num" style="color:var(--success, #16a34a);">${{ "{:,.2f}".format(m.entradas) }}</td>
+                <td class="num" style="color:var(--error, #dc2626);">${{ "{:,.2f}".format(m.salidas) }}</td>
+                <td class="num">
+                    <strong {% if neto_mes >= 0 %}style="color:var(--success, #16a34a);"{% else %}style="color:var(--error, #dc2626);"{% endif %}>
+                        ${{ "{:,.2f}".format(neto_mes) }}
+                    </strong>
+                </td>
+            </tr>
+            {% set ns2.total_ent = ns2.total_ent + m.entradas %}
+            {% set ns2.total_sal = ns2.total_sal + m.salidas %}
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr class="total-row">
+                <td><strong>TOTAL</strong></td>
+                <td class="num" style="color:var(--success, #16a34a);"><strong>${{ "{:,.2f}".format(ns2.total_ent) }}</strong></td>
+                <td class="num" style="color:var(--error, #dc2626);"><strong>${{ "{:,.2f}".format(ns2.total_sal) }}</strong></td>
+                <td class="num">
+                    <strong {% if ns2.total_ent - ns2.total_sal >= 0 %}style="color:var(--success, #16a34a);"{% else %}style="color:var(--error, #dc2626);"{% endif %}>
+                        ${{ "{:,.2f}".format(ns2.total_ent - ns2.total_sal) }}
+                    </strong>
+                </td>
+            </tr>
+        </tfoot>
+    </table>
     </div>
 </div>
 {% endif %}
 
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    var TIPO_LABELS = {
-        'COMPRA_DEBITO': 'Compras',
-        'TRANSFERENCIA_ENVIADA': 'Transf. Enviadas',
-        'TRANSFERENCIA_RECIBIDA': 'Transf. Recibidas',
-        'PAGO_SERVICIO': 'Pago Servicios',
-        'INTERES': 'Rendimientos',
-        'DEVOLUCION': 'Devoluciones',
-        'OTRO': 'Otros'
-    };
-
-    var COLORES = [
-        '#7c3aed', '#2563eb', '#059669', '#d97706', '#dc2626',
-        '#0891b2', '#db2777', '#4f46e5', '#65a30d', '#ea580c',
-        '#0d9488', '#6366f1', '#ca8a04', '#e11d48'
-    ];
-
-    {% if resumen.meses %}
-    // --- Grafico mensual ---
-    var mesesData = {{ resumen.meses | tojson }};
-    var mesesLabels = Object.keys(mesesData).sort();
-    var MESES_NOMBRE = ['', 'Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-
-    var labelsCortos = mesesLabels.map(function(k) {
-        var partes = k.split('-');
-        return MESES_NOMBRE[parseInt(partes[1])] + ' ' + partes[0];
-    });
-
-    new Chart(document.getElementById('chartMensualMP').getContext('2d'), {
-        type: 'bar',
-        data: {
-            labels: labelsCortos,
-            datasets: [
-                {
-                    label: 'Entradas',
-                    data: mesesLabels.map(function(k) { return mesesData[k].entradas; }),
-                    backgroundColor: 'rgba(5, 150, 105, 0.75)',
-                    borderColor: 'rgba(5, 150, 105, 1)',
-                    borderWidth: 1, borderRadius: 4
-                },
-                {
-                    label: 'Salidas',
-                    data: mesesLabels.map(function(k) { return mesesData[k].salidas; }),
-                    backgroundColor: 'rgba(220, 38, 38, 0.75)',
-                    borderColor: 'rgba(220, 38, 38, 1)',
-                    borderWidth: 1, borderRadius: 4
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            interaction: { intersect: false, mode: 'index' },
-            plugins: {
-                legend: { position: 'bottom', labels: { usePointStyle: true, padding: 12, font: { size: 11 } } },
-                tooltip: {
-                    backgroundColor: 'rgba(30,41,59,0.95)', padding: 12,
-                    callbacks: {
-                        label: function(ctx) {
-                            return ctx.dataset.label + ': $' + ctx.parsed.y.toLocaleString('es-AR', {minimumFractionDigits: 2});
-                        }
-                    }
-                }
-            },
-            scales: {
-                y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' },
-                    ticks: { callback: function(v) { return '$' + (v/1000).toFixed(0) + 'k'; } } },
-                x: { grid: { display: false }, ticks: { maxRotation: 45, font: { size: 11 } } }
-            }
-        }
-    });
-    {% endif %}
-
-    {% if resumen.por_tipo %}
-    // --- Grafico por tipo (doughnut con los top) ---
-    var porTipo = {{ resumen.por_tipo | tojson }};
-
-    // Agrupar por tipo (sumar entradas y salidas del mismo tipo)
-    var agrupado = {};
-    porTipo.forEach(function(d) {
-        if (!agrupado[d.tipo]) agrupado[d.tipo] = 0;
-        agrupado[d.tipo] += d.total;
-    });
-
-    var items = Object.keys(agrupado).map(function(k) { return { tipo: k, total: agrupado[k] }; });
-    items.sort(function(a, b) { return b.total - a.total; });
-    items = items.slice(0, 10);
-
-    new Chart(document.getElementById('chartTipoMP').getContext('2d'), {
-        type: 'doughnut',
-        data: {
-            labels: items.map(function(d) { return TIPO_LABELS[d.tipo] || d.tipo.replace(/_/g, ' '); }),
-            datasets: [{
-                data: items.map(function(d) { return d.total; }),
-                backgroundColor: items.map(function(_, i) { return COLORES[i % COLORES.length]; }),
-                borderWidth: 2,
-                borderColor: '#fff'
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { position: 'bottom', labels: { padding: 12, font: { size: 11 }, usePointStyle: true } },
-                tooltip: {
-                    backgroundColor: 'rgba(30,41,59,0.95)', padding: 12,
-                    callbacks: {
-                        label: function(ctx) {
-                            var total = ctx.dataset.data.reduce(function(a, b) { return a + b; }, 0);
-                            var pct = ((ctx.parsed / total) * 100).toFixed(1);
-                            return ctx.label + ': $' + ctx.parsed.toLocaleString('es-AR', {minimumFractionDigits: 2}) + ' (' + pct + '%)';
-                        }
-                    }
-                }
-            }
-        }
-    });
-    {% endif %}
-
-    if (typeof lucide !== 'undefined') lucide.createIcons();
-});
-</script>
 {% endif %}
 {% endblock %}

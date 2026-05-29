@@ -45,8 +45,8 @@ _REGLAS_RAW: list[tuple[str, TipoMovimiento]] = [
 
     # ---- COMPRAS ----
     (r"Compra\s+Mercado\s+Libre", TipoMovimiento.COMPRA_DEBITO),
-    (r"Compra\s+de\s+d[oó]lar\s+MEP", TipoMovimiento.OTRO),
-    (r"Venta\s+de\s+d[oó]lar\s+MEP", TipoMovimiento.OTRO),
+    (r"Compra\s+de\s+d[oó]lar\s+MEP", TipoMovimiento.COMPRA_DOLAR_MEP),
+    (r"Venta\s+de\s+d[oó]lar\s+MEP", TipoMovimiento.VENTA_DOLAR_MEP),
     (r"Pago\s+con\s+QR", TipoMovimiento.COMPRA_DEBITO),
     (r"Pago\s+Mercado\s+Libre", TipoMovimiento.COMPRA_DEBITO),
     (r"Pago\s+Temu", TipoMovimiento.COMPRA_DEBITO),
@@ -56,7 +56,7 @@ _REGLAS_RAW: list[tuple[str, TipoMovimiento]] = [
     (r"^Pago\s+", TipoMovimiento.COMPRA_DEBITO),
 
     # ---- LIQUIDACIONES (cobros por ventas con MP) ----
-    (r"Liquidaci[oó]n\s+de\s+dinero", TipoMovimiento.OTRO),
+    (r"Liquidaci[oó]n\s+de\s+dinero", TipoMovimiento.COBRO_VENTAS),
 
     # ---- RENDIMIENTOS (intereses del saldo) ----
     (r"Rendimientos", TipoMovimiento.INTERES),

@@ -76,6 +76,11 @@ class TipoMovimiento(str, Enum):
     IMPUESTO_SELLOS = "IMPUESTO_SELLOS"
     INTERES = "INTERES"
 
+    # MercadoPago específicos
+    COBRO_VENTAS = "COBRO_VENTAS"              # Liquidación de dinero (cobros MP Point/QR)
+    COMPRA_DOLAR_MEP = "COMPRA_DOLAR_MEP"
+    VENTA_DOLAR_MEP = "VENTA_DOLAR_MEP"
+
     # Ajustes y otros
     DEVOLUCION = "DEVOLUCION"
     EMBARGO = "EMBARGO"

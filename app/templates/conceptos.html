@@ -5,7 +5,7 @@
 {% block content %}
 <div class="page-header">
     <h1>Conceptos Recurrentes</h1>
-    <p class="subtitle">Desglose de cada concepto por mes: cantidad, debitos y creditos</p>
+    <p class="subtitle">Cada concepto del extracto con su detalle mes a mes. Hace click en una fila para expandir.</p>
 </div>
 
 <div class="card">
@@ -55,43 +55,41 @@
 {% if reporte and reporte.conceptos %}
 
 <!-- Resumen general -->
-<div class="stats-grid" style="margin-bottom: 1rem;">
-    <div class="stat-card">
-        <div class="stat-value">{{ reporte.conceptos | length }}</div>
-        <div class="stat-label">Conceptos</div>
+<div class="cr-stats">
+    <div class="cr-stat">
+        <span class="cr-stat-val">{{ reporte.conceptos | length }}</span>
+        <span class="cr-stat-lbl">conceptos</span>
     </div>
-    <div class="stat-card">
-        <div class="stat-value">{{ reporte.periodos | length }}</div>
-        <div class="stat-label">Meses</div>
+    <div class="cr-stat">
+        <span class="cr-stat-val">{{ "{:,}".format(reporte.total_cantidad) }}</span>
+        <span class="cr-stat-lbl">movimientos</span>
     </div>
-    <div class="stat-card">
-        <div class="stat-value">{{ "{:,}".format(reporte.total_cantidad) }}</div>
-        <div class="stat-label">Movimientos</div>
+    <div class="cr-stat">
+        <span class="cr-stat-val cr-deb">${{ "{:,.2f}".format(reporte.total_debito) }}</span>
+        <span class="cr-stat-lbl">debitos</span>
     </div>
-    <div class="stat-card">
-        <div class="stat-value">${{ "{:,.2f}".format(reporte.total_debito) }}</div>
-        <div class="stat-label">Total Debitos</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-value">${{ "{:,.2f}".format(reporte.total_credito) }}</div>
-        <div class="stat-label">Total Creditos</div>
+    <div class="cr-stat">
+        <span class="cr-stat-val cr-cre">${{ "{:,.2f}".format(reporte.total_credito) }}</span>
+        <span class="cr-stat-lbl">creditos</span>
     </div>
 </div>
 
 <div class="card">
     <div class="card-header">
-        <h2>Detalle por concepto y mes</h2>
+        <h2>Detalle por concepto</h2>
+        <button class="btn btn-sm" id="btnExpandAll" type="button">
+            <i data-lucide="chevrons-down"></i> Expandir todo
+        </button>
     </div>
     <div class="table-responsive">
-    <table class="table-conceptos">
+    <table class="cr-table">
         <thead>
             <tr>
-                <th style="position:sticky;left:0;background:var(--bg-card);z-index:2;">Concepto</th>
+                <th style="width:30px;"></th>
+                <th>Concepto</th>
                 <th>Tipo</th>
-                {% for p in reporte.periodos %}
-                <th class="num" colspan="1" title="{{ periodo_label(p) }}">{{ periodo_label(p) }}</th>
-                {% endfor %}
-                <th class="num">Total Cant</th>
+                <th class="num">Meses</th>
+                <th class="num">Cantidad</th>
                 <th class="num">Total Debito</th>
                 <th class="num">Total Credito</th>
                 <th class="num">Neto</th>
@@ -99,76 +97,107 @@
         </thead>
         <tbody>
             {% for cr in reporte.conceptos %}
-            <tr class="concepto-row">
-                <td style="position:sticky;left:0;background:var(--bg-card);z-index:1;" title="{{ cr.concepto }}">
-                    <div style="max-width:300px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
-                        {{ cr.concepto }}
-                    </div>
-                </td>
+            <tr class="cr-row" data-idx="{{ loop.index }}">
+                <td class="cr-chevron"><i data-lucide="chevron-right" class="cr-icon"></i></td>
+                <td class="cr-concepto" title="{{ cr.concepto }}">{{ cr.concepto }}</td>
                 <td><span class="badge badge-{{ cr.tipo | lower }}">{{ cr.tipo | replace("_", " ") }}</span></td>
-                {% for p in reporte.periodos %}
-                {% set det = cr.meses.get(p) %}
-                <td class="num celda-mes">
-                    {% if det %}
-                    <div class="mes-cantidad">{{ det.cantidad }}x</div>
-                    {% if det.total_debito > 0 %}
-                    <div class="mes-debito">-${{ "{:,.2f}".format(det.total_debito) }}</div>
-                    {% endif %}
-                    {% if det.total_credito > 0 %}
-                    <div class="mes-credito">+${{ "{:,.2f}".format(det.total_credito) }}</div>
-                    {% endif %}
-                    {% else %}
-                    <span class="text-muted">-</span>
-                    {% endif %}
-                </td>
-                {% endfor %}
-                <td class="num"><strong>{{ cr.total_cantidad }}</strong></td>
+                <td class="num">{{ cr.cantidad_meses }}</td>
+                <td class="num">{{ cr.total_cantidad }}</td>
                 <td class="num">
                     {% if cr.total_debito > 0 %}
-                    <span class="text-debito">${{ "{:,.2f}".format(cr.total_debito) }}</span>
-                    {% else %}-{% endif %}
+                    <span class="cr-deb">${{ "{:,.2f}".format(cr.total_debito) }}</span>
+                    {% else %}<span class="cr-muted">-</span>{% endif %}
                 </td>
                 <td class="num">
                     {% if cr.total_credito > 0 %}
-                    <span class="text-credito">${{ "{:,.2f}".format(cr.total_credito) }}</span>
-                    {% else %}-{% endif %}
+                    <span class="cr-cre">${{ "{:,.2f}".format(cr.total_credito) }}</span>
+                    {% else %}<span class="cr-muted">-</span>{% endif %}
                 </td>
                 <td class="num">
-                    <strong {% if cr.total_neto >= 0 %}class="text-credito"{% else %}class="text-debito"{% endif %}>
+                    <strong {% if cr.total_neto >= 0 %}class="cr-cre"{% else %}class="cr-deb"{% endif %}>
                         ${{ "{:,.2f}".format(cr.total_neto) }}
                     </strong>
+                </td>
+            </tr>
+            <tr class="cr-detail" id="detail-{{ loop.index }}">
+                <td colspan="8">
+                    <table class="cr-subtable">
+                        <thead>
+                            <tr>
+                                <th>Mes</th>
+                                <th class="num">Cantidad</th>
+                                <th class="num">Debito</th>
+                                <th class="num">Credito</th>
+                                <th class="num">Neto</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for p in reporte.periodos %}
+                            {% set det = cr.meses.get(p) %}
+                            {% if det %}
+                            {% set anio = p.split('-')[0]|int %}
+                            {% set mes = p.split('-')[1]|int %}
+                            {% set fd = "%04d-%02d-01"|format(anio, mes) %}
+                            {% set dias = [0,31,28,31,30,31,30,31,31,30,31,30,31] %}
+                            {% set ultimo = dias[mes] %}
+                            {% if mes == 2 and (anio % 4 == 0 and (anio % 100 != 0 or anio % 400 == 0)) %}
+                            {% set ultimo = 29 %}
+                            {% endif %}
+                            {% set fh = "%04d-%02d-%02d"|format(anio, mes, ultimo) %}
+                            <tr class="cr-mes-link" onclick="window.location='/movimientos?buscar={{ cr.concepto|urlencode }}&fecha_desde={{ fd }}&fecha_hasta={{ fh }}'">
+                                <td>
+                                    {{ periodo_label(p) }}
+                                    <i data-lucide="external-link" style="width:12px;height:12px;color:var(--text-muted);vertical-align:middle;margin-left:4px;"></i>
+                                </td>
+                                <td class="num">{{ det.cantidad }}</td>
+                                <td class="num">
+                                    {% if det.total_debito > 0 %}
+                                    <span class="cr-deb">${{ "{:,.2f}".format(det.total_debito) }}</span>
+                                    {% else %}<span class="cr-muted">-</span>{% endif %}
+                                </td>
+                                <td class="num">
+                                    {% if det.total_credito > 0 %}
+                                    <span class="cr-cre">${{ "{:,.2f}".format(det.total_credito) }}</span>
+                                    {% else %}<span class="cr-muted">-</span>{% endif %}
+                                </td>
+                                <td class="num">
+                                    <strong {% if det.total_neto >= 0 %}class="cr-cre"{% else %}class="cr-deb"{% endif %}>
+                                        ${{ "{:,.2f}".format(det.total_neto) }}
+                                    </strong>
+                                </td>
+                            </tr>
+                            {% endif %}
+                            {% endfor %}
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <td><strong>Subtotal</strong></td>
+                                <td class="num"><strong>{{ cr.total_cantidad }}</strong></td>
+                                <td class="num"><strong class="cr-deb">${{ "{:,.2f}".format(cr.total_debito) }}</strong></td>
+                                <td class="num"><strong class="cr-cre">${{ "{:,.2f}".format(cr.total_credito) }}</strong></td>
+                                <td class="num">
+                                    <strong {% if cr.total_neto >= 0 %}class="cr-cre"{% else %}class="cr-deb"{% endif %}>
+                                        ${{ "{:,.2f}".format(cr.total_neto) }}
+                                    </strong>
+                                </td>
+                            </tr>
+                        </tfoot>
+                    </table>
                 </td>
             </tr>
             {% endfor %}
         </tbody>
         <tfoot>
-            <tr class="total-row">
-                <td style="position:sticky;left:0;background:var(--bg-hover);z-index:1;"><strong>TOTAL</strong></td>
+            <tr class="cr-total-row">
                 <td></td>
-                {% for p in reporte.periodos %}
-                {% set ns_p = namespace(cant=0, deb=0, cre=0) %}
-                {% for cr in reporte.conceptos %}
-                    {% if p in cr.meses %}
-                        {% set ns_p.cant = ns_p.cant + cr.meses[p].cantidad %}
-                        {% set ns_p.deb = ns_p.deb + cr.meses[p].total_debito|float %}
-                        {% set ns_p.cre = ns_p.cre + cr.meses[p].total_credito|float %}
-                    {% endif %}
-                {% endfor %}
-                <td class="num celda-mes">
-                    <div class="mes-cantidad"><strong>{{ ns_p.cant }}</strong></div>
-                    {% if ns_p.deb > 0 %}
-                    <div class="mes-debito"><strong>-${{ "{:,.2f}".format(ns_p.deb) }}</strong></div>
-                    {% endif %}
-                    {% if ns_p.cre > 0 %}
-                    <div class="mes-credito"><strong>+${{ "{:,.2f}".format(ns_p.cre) }}</strong></div>
-                    {% endif %}
-                </td>
-                {% endfor %}
+                <td><strong>TOTAL</strong></td>
+                <td></td>
+                <td class="num"><strong>{{ reporte.periodos | length }}</strong></td>
                 <td class="num"><strong>{{ "{:,}".format(reporte.total_cantidad) }}</strong></td>
-                <td class="num"><strong class="text-debito">${{ "{:,.2f}".format(reporte.total_debito) }}</strong></td>
-                <td class="num"><strong class="text-credito">${{ "{:,.2f}".format(reporte.total_credito) }}</strong></td>
+                <td class="num"><strong class="cr-deb">${{ "{:,.2f}".format(reporte.total_debito) }}</strong></td>
+                <td class="num"><strong class="cr-cre">${{ "{:,.2f}".format(reporte.total_credito) }}</strong></td>
                 <td class="num">
-                    <strong {% if reporte.total_neto >= 0 %}class="text-credito"{% else %}class="text-debito"{% endif %}>
+                    <strong {% if reporte.total_neto >= 0 %}class="cr-cre"{% else %}class="cr-deb"{% endif %}>
                         ${{ "{:,.2f}".format(reporte.total_neto) }}
                     </strong>
                 </td>
@@ -189,54 +218,159 @@
 
 {% block head %}
 <style>
-    .celda-mes {
-        min-width: 110px;
-        padding: 0.35rem 0.5rem !important;
-        vertical-align: top;
+    /* Stats bar */
+    .cr-stats {
+        display: flex;
+        gap: 1.5rem;
+        flex-wrap: wrap;
+        margin-bottom: 1rem;
+        padding: 0.75rem 0;
     }
-    .mes-cantidad {
-        font-size: 0.85em;
-        color: var(--text-muted);
-        margin-bottom: 2px;
+    .cr-stat {
+        display: flex;
+        align-items: baseline;
+        gap: 0.4rem;
     }
-    .mes-debito {
-        font-size: 0.82em;
-        color: var(--danger, #dc2626);
-    }
-    .mes-credito {
-        font-size: 0.82em;
-        color: var(--success, #16a34a);
-    }
-    .text-debito { color: var(--danger, #dc2626); }
-    .text-credito { color: var(--success, #16a34a); }
-    .text-muted { color: var(--text-muted, #9ca3af); }
-    .concepto-row:hover td {
-        background: var(--bg-hover, #f9fafb) !important;
-    }
-    .table-conceptos {
-        font-size: 0.9em;
-    }
-    .stats-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-        gap: 0.75rem;
-    }
-    .stat-card {
-        background: var(--bg-card, #fff);
-        border: 1px solid var(--border, #e5e7eb);
-        border-radius: 8px;
-        padding: 1rem;
-        text-align: center;
-    }
-    .stat-value {
-        font-size: 1.3rem;
+    .cr-stat-val {
+        font-size: 1.15rem;
         font-weight: 700;
-        color: var(--text, #111827);
     }
-    .stat-label {
+    .cr-stat-lbl {
         font-size: 0.8rem;
         color: var(--text-muted, #6b7280);
-        margin-top: 0.25rem;
+    }
+
+    /* Colors */
+    .cr-deb { color: var(--danger, #dc2626); }
+    .cr-cre { color: var(--success, #16a34a); }
+    .cr-muted { color: var(--text-muted, #9ca3af); }
+
+    /* Main table */
+    .cr-table { width: 100%; }
+    .cr-row {
+        cursor: pointer;
+        transition: background 0.1s;
+    }
+    .cr-row:hover td {
+        background: var(--bg-hover, #f9fafb);
+    }
+    .cr-row.expanded td {
+        background: var(--bg-hover, #f3f4f6);
+        font-weight: 500;
+    }
+    .cr-chevron {
+        width: 30px;
+        text-align: center;
+        padding: 0 !important;
+    }
+    .cr-icon {
+        width: 16px;
+        height: 16px;
+        transition: transform 0.2s;
+        color: var(--text-muted, #9ca3af);
+    }
+    .cr-row.expanded .cr-icon {
+        transform: rotate(90deg);
+        color: var(--primary, #2563eb);
+    }
+    .cr-concepto {
+        max-width: 350px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    /* Detail row */
+    .cr-detail {
+        display: none;
+    }
+    .cr-detail.visible {
+        display: table-row;
+    }
+    .cr-detail > td {
+        padding: 0 0 0 2.5rem !important;
+        background: var(--bg-hover, #f9fafb);
+        border-bottom: 2px solid var(--border, #e5e7eb);
+    }
+
+    /* Sub-table */
+    .cr-subtable {
+        width: 100%;
+        max-width: 600px;
+        margin: 0.5rem 0;
+        font-size: 0.88em;
+    }
+    .cr-subtable thead th {
+        background: transparent;
+        border-bottom: 1px solid var(--border, #e5e7eb);
+        font-size: 0.8em;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        color: var(--text-muted, #6b7280);
+        padding: 0.3rem 0.5rem;
+    }
+    .cr-subtable tbody td {
+        padding: 0.35rem 0.5rem;
+        border-bottom: 1px solid var(--border-light, #f3f4f6);
+    }
+    .cr-subtable tfoot td {
+        padding: 0.4rem 0.5rem;
+        border-top: 2px solid var(--border, #e5e7eb);
+        background: rgba(0,0,0,0.02);
+    }
+
+    /* Month links */
+    .cr-mes-link {
+        cursor: pointer;
+        transition: background 0.1s;
+    }
+    .cr-mes-link:hover td {
+        background: var(--bg-card, #fff) !important;
+        color: var(--primary, #2563eb);
+    }
+
+    /* Total row */
+    .cr-total-row td {
+        background: var(--bg-hover, #f3f4f6);
+        border-top: 2px solid var(--border, #e5e7eb);
     }
 </style>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function() {
+    var allExpanded = false;
+
+    // Toggle individual row
+    document.querySelectorAll('.cr-row').forEach(function(row) {
+        row.addEventListener('click', function() {
+            var idx = this.getAttribute('data-idx');
+            var detail = document.getElementById('detail-' + idx);
+            var isOpen = detail.classList.contains('visible');
+            detail.classList.toggle('visible', !isOpen);
+            this.classList.toggle('expanded', !isOpen);
+            lucide.createIcons();
+        });
+    });
+
+    // Expand/collapse all
+    var btn = document.getElementById('btnExpandAll');
+    if (btn) {
+        btn.addEventListener('click', function() {
+            allExpanded = !allExpanded;
+            document.querySelectorAll('.cr-detail').forEach(function(d) {
+                d.classList.toggle('visible', allExpanded);
+            });
+            document.querySelectorAll('.cr-row').forEach(function(r) {
+                r.classList.toggle('expanded', allExpanded);
+            });
+            btn.innerHTML = allExpanded
+                ? '<i data-lucide="chevrons-up"></i> Colapsar todo'
+                : '<i data-lucide="chevrons-down"></i> Expandir todo';
+            lucide.createIcons();
+        });
+    }
+})();
+</script>
 {% endblock %}
