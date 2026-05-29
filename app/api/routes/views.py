@@ -47,6 +47,11 @@ from app.services.clientes import (
 )
 from app.reports.ley_25413 import generar_reporte_ley_25413, resumen_general, exportar_reporte_xlsx
 from app.reports.percepciones import generar_reporte_percepciones, resumen_totales, exportar_percepciones_xlsx
+from app.reports.conceptos_recurrentes import (
+    generar_reporte_conceptos,
+    exportar_conceptos_xlsx,
+    periodo_label,
+)
 from app.services.monotributo import generar_panel_monotributo, CATEGORIAS_MONOTRIBUTO
 from app.services.comprobantes import (
     guardar_comprobantes,
@@ -536,6 +541,90 @@ async def sircreb_descargar(request: Request, db: Session = Depends(get_db)):
         xlsx,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": "attachment; filename=sircreb_iibb.xlsx"},
+    )
+
+
+# --------------------------------------------------------------------------
+# Conceptos Recurrentes
+# --------------------------------------------------------------------------
+
+@router.get("/conceptos", response_class=HTMLResponse)
+async def conceptos_page(
+    request: Request,
+    tipo: str | None = None,
+    signo: str | None = None,
+    buscar: str | None = None,
+    fecha_desde: str | None = None,
+    fecha_hasta: str | None = None,
+    db: Session = Depends(get_db),
+):
+    from datetime import date as date_type
+    from app.domain.models import TipoMovimiento
+
+    fd = date_type.fromisoformat(fecha_desde) if fecha_desde else None
+    fh = date_type.fromisoformat(fecha_hasta) if fecha_hasta else None
+
+    cids = _get_cliente_ids(request, db)
+    reporte = generar_reporte_conceptos(
+        db, cliente_ids=cids, tipo=tipo, signo=signo,
+        buscar=buscar, fecha_desde=fd, fecha_hasta=fh,
+    )
+
+    # Construir query string para el link de descarga
+    params = []
+    if tipo:
+        params.append(f"tipo={tipo}")
+    if signo:
+        params.append(f"signo={signo}")
+    if buscar:
+        params.append(f"buscar={buscar}")
+    if fecha_desde:
+        params.append(f"fecha_desde={fecha_desde}")
+    if fecha_hasta:
+        params.append(f"fecha_hasta={fecha_hasta}")
+    query_string = "&".join(params)
+
+    tipos = [t.value for t in TipoMovimiento]
+
+    return templates.TemplateResponse("conceptos.html", _ctx(
+        request,
+        reporte=reporte,
+        tipo_filtro=tipo,
+        signo_filtro=signo,
+        buscar=buscar,
+        fecha_desde=fecha_desde,
+        fecha_hasta=fecha_hasta,
+        tipos=tipos,
+        query_string=query_string,
+        periodo_label=periodo_label,
+    ))
+
+
+@router.get("/conceptos/descargar")
+async def descargar_conceptos(
+    request: Request,
+    tipo: str | None = None,
+    signo: str | None = None,
+    buscar: str | None = None,
+    fecha_desde: str | None = None,
+    fecha_hasta: str | None = None,
+    db: Session = Depends(get_db),
+):
+    from datetime import date as date_type
+
+    fd = date_type.fromisoformat(fecha_desde) if fecha_desde else None
+    fh = date_type.fromisoformat(fecha_hasta) if fecha_hasta else None
+
+    cids = _get_cliente_ids(request, db)
+    reporte = generar_reporte_conceptos(
+        db, cliente_ids=cids, tipo=tipo, signo=signo,
+        buscar=buscar, fecha_desde=fd, fecha_hasta=fh,
+    )
+    xlsx = exportar_conceptos_xlsx(reporte)
+    return StreamingResponse(
+        xlsx,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": "attachment; filename=conceptos_recurrentes.xlsx"},
     )
 
 

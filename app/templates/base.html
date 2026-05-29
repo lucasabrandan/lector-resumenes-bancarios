@@ -40,6 +40,9 @@
                 <a href="/movimientos" class="sidebar-link {{ 'active' if '/movimientos' in request.url.path else '' }}">
                     <i data-lucide="list"></i> Movimientos
                 </a>
+                <a href="/conceptos" class="sidebar-link {{ 'active' if '/conceptos' in request.url.path else '' }}">
+                    <i data-lucide="repeat"></i> Conceptos
+                </a>
                 {% endif %}
 
                 <div class="sidebar-section">Reportes</div>
@@ -145,6 +148,15 @@
         <div class="more-overlay" id="moreOverlay"></div>
         <div class="more-sheet" id="moreSheet">
             <div class="more-sheet-handle"></div>
+            <div class="more-sheet-section-label">Analisis</div>
+            <div class="more-sheet-grid">
+                {% if usuario and usuario.tiene_permiso('movimientos') %}
+                <a href="/conceptos" class="more-sheet-item {{ 'active' if '/conceptos' in request.url.path else '' }}">
+                    <i data-lucide="repeat"></i>
+                    Conceptos
+                </a>
+                {% endif %}
+            </div>
             <div class="more-sheet-section-label">Reportes</div>
             <div class="more-sheet-grid">
                 {% if usuario and usuario.tiene_permiso('percepciones') %}

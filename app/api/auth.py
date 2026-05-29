@@ -33,6 +33,8 @@ PERMISOS_RUTA: dict[str, str] = {
     "/reporte/descargar": "reporte",
     "/percepciones": "percepciones",
     "/percepciones/descargar": "percepciones",
+    "/conceptos": "movimientos",
+    "/conceptos/descargar": "movimientos",
     "/sircreb": "sircreb",
     "/sircreb/descargar": "sircreb",
     "/clientes": "clientes",
