@@ -80,6 +80,22 @@ _TEMPLATES_DIR = Path(__file__).resolve().parent.parent.parent / "templates"
 templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
 
 
+def _fecha_ar(value) -> str:
+    """Filtro Jinja2: convierte date/datetime a dd/mm/aaaa."""
+    if value is None:
+        return "-"
+    if hasattr(value, "strftime"):
+        return value.strftime("%d/%m/%Y")
+    # Si es string ISO (yyyy-mm-dd), reformatear
+    s = str(value)
+    if len(s) == 10 and s[4] == "-":
+        return f"{s[8:10]}/{s[5:7]}/{s[0:4]}"
+    return s
+
+
+templates.env.filters["fecha_ar"] = _fecha_ar
+
+
 def _ctx(request: Request, **kwargs) -> dict:
     """Contexto base con datos del usuario logueado."""
     usuario = getattr(request.state, "usuario", None)

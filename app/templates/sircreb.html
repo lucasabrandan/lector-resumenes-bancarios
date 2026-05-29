@@ -95,7 +95,7 @@
             <tr>
                 <td>{{ a.archivo }}</td>
                 <td class="num">{{ "{:,}".format(a.cantidad) }}</td>
-                <td>{{ a.fecha_desde }} a {{ a.fecha_hasta }}</td>
+                <td>{{ a.fecha_desde | fecha_ar }} a {{ a.fecha_hasta | fecha_ar }}</td>
                 <td class="num">${{ "{:,.2f}".format(a.total) }}</td>
                 <td style="text-align:center;">
                     <form method="post" action="/sircreb/eliminar" style="display:inline;"

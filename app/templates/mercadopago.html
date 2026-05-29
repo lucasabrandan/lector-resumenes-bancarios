@@ -2,6 +2,18 @@
 
 {% block title %}MercadoPago - Lector de Resumenes{% endblock %}
 
+{% block head %}
+<style>
+    .mp-link {
+        cursor: pointer;
+        transition: background 0.1s;
+    }
+    .mp-link:hover td {
+        background: var(--border-light, #f1f5f9);
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 {% if not resumen %}
 <div class="card">
@@ -72,8 +84,11 @@
         <tbody>
             {% set ns = namespace(total_ent=0, total_sal=0) %}
             {% for item in resumen.por_tipo %}
-            <tr>
-                <td><span class="badge badge-{{ item.tipo | lower }}">{{ item.tipo | replace("_", " ") }}</span></td>
+            <tr class="mp-link" onclick="window.location='/movimientos?tipo={{ item.tipo }}'">
+                <td>
+                    <span class="badge badge-{{ item.tipo | lower }}">{{ item.tipo | replace("_", " ") }}</span>
+                    <i data-lucide="external-link" style="width:12px;height:12px;color:var(--text-muted);vertical-align:middle;margin-left:4px;"></i>
+                </td>
                 <td>{{ "Entrada" if item.signo == "CREDITO" else "Salida" }}</td>
                 <td class="num">{{ "{:,}".format(item.cantidad) }}</td>
                 <td class="num" style="color:{{ 'var(--success, #16a34a)' if item.signo == 'CREDITO' else 'var(--error, #dc2626)' }};">
@@ -129,8 +144,19 @@
             {% set anio = partes[0] %}
             {% set mes = partes[1]|int %}
             {% set neto_mes = m.entradas - m.salidas %}
-            <tr>
-                <td>{{ meses_corto[mes] }} {{ anio }}</td>
+            {% set anio_i = anio|int %}
+            {% set dias = [0,31,28,31,30,31,30,31,31,30,31,30,31] %}
+            {% set ultimo = dias[mes] %}
+            {% if mes == 2 and (anio_i % 4 == 0 and (anio_i % 100 != 0 or anio_i % 400 == 0)) %}
+            {% set ultimo = 29 %}
+            {% endif %}
+            {% set fd = "%04d-%02d-01"|format(anio_i, mes) %}
+            {% set fh = "%04d-%02d-%02d"|format(anio_i, mes, ultimo) %}
+            <tr class="mp-link" onclick="window.location='/movimientos?buscar=&tipo=&fecha_desde={{ fd }}&fecha_hasta={{ fh }}'">
+                <td>
+                    {{ meses_corto[mes] }} {{ anio }}
+                    <i data-lucide="external-link" style="width:12px;height:12px;color:var(--text-muted);vertical-align:middle;margin-left:4px;"></i>
+                </td>
                 <td class="num" style="color:var(--success, #16a34a);">${{ "{:,.2f}".format(m.entradas) }}</td>
                 <td class="num" style="color:var(--error, #dc2626);">${{ "{:,.2f}".format(m.salidas) }}</td>
                 <td class="num">

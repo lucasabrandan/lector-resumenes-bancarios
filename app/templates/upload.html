@@ -128,7 +128,7 @@
             <tr>
                 <td>{{ a.archivo }}</td>
                 <td class="num">{{ "{:,}".format(a.cantidad) }}</td>
-                <td>{{ a.fecha_min }} a {{ a.fecha_max }}</td>
+                <td>{{ a.fecha_min | fecha_ar }} a {{ a.fecha_max | fecha_ar }}</td>
                 <td style="text-align: center;">
                     <form method="post" action="/upload/eliminar" style="display:inline;"
                           data-confirm="Se eliminaran {{ a.cantidad }} movimientos del archivo {{ a.archivo }}. Esta accion no se puede deshacer."

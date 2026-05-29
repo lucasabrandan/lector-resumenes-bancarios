@@ -60,7 +60,7 @@
         <tbody>
             {% for m in movimientos %}
             <tr class="{{ 'row-credito' if m.signo == 'CREDITO' else 'row-debito' }}">
-                <td style="white-space: nowrap;">{{ m.fecha }}</td>
+                <td style="white-space: nowrap;">{{ m.fecha | fecha_ar }}</td>
                 <td>
                     {{ m.concepto }}
                     {% if m.detalle_adicional %}
